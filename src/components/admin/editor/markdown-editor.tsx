@@ -90,7 +90,15 @@ export function MarkdownEditor({
           syntaxHighlighting(highlight),
           highlightSelectionMatches(),
           placeholderExtension("Start writing in Markdown…"),
-          EditorView.contentAttributes.of({ "aria-label": label, spellcheck: "true", autocapitalize: "sentences" }),
+          // Explicit tabindex so assistive tech (and axe) treat the scrollable editor as keyboard-reachable.
+          EditorView.contentAttributes.of({
+            "aria-label": label,
+            "aria-multiline": "true",
+            role: "textbox",
+            tabindex: "0",
+            spellcheck: "true",
+            autocapitalize: "sentences",
+          }),
           keymap.of([
             { key: "Mod-b", run: run(toggleInline("**")) },
             { key: "Mod-i", run: run(toggleInline("_")) },

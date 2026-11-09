@@ -14,13 +14,35 @@ const SESSION_COOKIES = ["authjs.session-token", "__Secure-authjs.session-token"
 /** Short, because the map is refreshed stale-while-revalidate after each publish. */
 const REDIRECTS_TTL_MS = 5_000;
 
+const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
 let redirectCache: { map: Record<string, string>; fetchedAt: number } | null = null;
 
-async function getRedirects(origin: string): Promise<Record<string, string>> {
+/**
+ * The redirect map is fetched from the configured site URL, never from the
+ * request's Host header: that header is client-controlled, and trusting it
+ * would let anyone point this server-side fetch at another host and poison
+ * the shared cache. Only the request origin is used as a fallback in dev.
+ */
+function trustedOrigin(request: NextRequest): string | null {
+  // SITE_URL is read at runtime; NEXT_PUBLIC_SITE_URL is inlined at build time.
+  const configured = process.env.SITE_URL ?? process.env.NEXT_PUBLIC_SITE_URL;
+  if (configured) return new URL(configured).origin;
+  return process.env.NODE_ENV === "development" ? request.nextUrl.origin : null;
+}
+
+async function getRedirects(request: NextRequest): Promise<Record<string, string>> {
   if (redirectCache && Date.now() - redirectCache.fetchedAt < REDIRECTS_TTL_MS) return redirectCache.map;
+  const origin = trustedOrigin(request);
+  if (!origin) return {};
   try {
     const response = await fetch(`${origin}/api/content/redirects`, { cache: "no-store" });
-    const map = response.ok ? ((await response.json()) as Record<string, string>) : {};
+    const raw: unknown = response.ok ? await response.json() : {};
+    const map: Record<string, string> = {};
+    if (raw && typeof raw === "object") {
+      for (const [from, to] of Object.entries(raw))
+        if (SLUG.test(from) && typeof to === "string" && SLUG.test(to)) map[from] = to;
+    }
     redirectCache = { map, fetchedAt: Date.now() };
     return map;
   } catch {
@@ -33,7 +55,10 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith("/admin")) {
-    if (pathname === "/admin/login") return NextResponse.next();
+    // Only page navigations are redirected. Server actions (POST) must reach
+    // the server so they can return their own "not authorized" result.
+    if (pathname === "/admin/login" || (request.method !== "GET" && request.method !== "HEAD"))
+      return NextResponse.next();
     const hasSession = SESSION_COOKIES.some((name) => request.cookies.has(name));
     if (!hasSession) {
       const url = request.nextUrl.clone();
@@ -46,7 +71,7 @@ export async function proxy(request: NextRequest) {
 
   const match = /^\/blog\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?$/.exec(pathname);
   if (match?.[1]) {
-    const target = (await getRedirects(request.nextUrl.origin))[match[1]];
+    const target = (await getRedirects(request))[match[1]];
     if (target && target !== match[1]) {
       const url = request.nextUrl.clone();
       url.pathname = `/blog/${target}`;

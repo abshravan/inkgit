@@ -1,0 +1,40 @@
+# Copy to .github/workflows/validate-content.yml in your CONTENT repository.
+# Validates every pull request and push with the same rules InkGit applies
+# before publishing (frontmatter schema, taxonomy, MDX compilation).
+#
+# If the InkGit app repository is private, create a read-only fine-grained
+# token for it and store it as the INKGIT_READ_TOKEN secret.
+name: Validate content
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: content-repo
+      - uses: actions/checkout@v4
+        with:
+          repository: abshravan/inkgit # your InkGit app repository
+          token: ${{ secrets.INKGIT_READ_TOKEN || github.token }}
+          path: inkgit
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: inkgit/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+        working-directory: inkgit
+      # Point at the folder holding posts/, pages/ and taxonomy.yml.
+      - run: pnpm content:check ../content-repo/content --strict
+        working-directory: inkgit

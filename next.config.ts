@@ -1,9 +1,10 @@
 import type { NextConfig } from "next";
+import { buildSecurityHeaders } from "./src/config/security-headers";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
+  poweredByHeader: false,
   turbopack: {
     rules: {
       "*.css": {
@@ -11,6 +12,19 @@ const nextConfig: NextConfig = {
         as: "*.css",
       },
     },
+  },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: buildSecurityHeaders({
+          isDev: process.env.NODE_ENV === "development",
+          analyticsSrc: process.env.NEXT_PUBLIC_ANALYTICS_DOMAIN
+            ? (process.env.NEXT_PUBLIC_ANALYTICS_SRC ?? "https://plausible.io/js/script.js")
+            : undefined,
+        }),
+      },
+    ];
   },
 };
 

@@ -1,6 +1,7 @@
 import "server-only";
 import { siteConfig } from "@/config/site";
 import { getServerEnv } from "@/lib/env";
+import { GitHubAppTokenSource } from "@/modules/git/github/app-auth";
 import { GitHubClient } from "@/modules/git/github/github-client";
 import { GitHubProvider } from "@/modules/git/github/github-provider";
 import { LocalFsProvider } from "@/modules/git/local/local-fs-provider";
@@ -25,13 +26,23 @@ function createProvider(): GitProvider {
     case "github": {
       // Validated by the env schema: both are present when CONTENT_SOURCE=github.
       const [owner = "", repo = ""] = (env.CONTENT_REPO ?? "").split("/");
-      return new GitHubProvider({
-        owner,
-        repo,
-        branch: env.CONTENT_BRANCH,
-        contentPath: env.CONTENT_REPO_PATH,
-        client: new GitHubClient({ token: env.CONTENT_GITHUB_TOKEN ?? "", apiBaseUrl: env.GITHUB_API_URL }),
+      // Prefer a GitHub App (short-lived, repo-scoped tokens) over a PAT when configured.
+      const app =
+        env.GITHUB_APP_ID && env.GITHUB_APP_INSTALLATION_ID && env.GITHUB_APP_PRIVATE_KEY
+          ? new GitHubAppTokenSource({
+              appId: env.GITHUB_APP_ID,
+              installationId: env.GITHUB_APP_INSTALLATION_ID,
+              privateKey: env.GITHUB_APP_PRIVATE_KEY,
+              repository: repo,
+              apiBaseUrl: env.GITHUB_API_URL,
+            })
+          : null;
+      const client = new GitHubClient({
+        token: app ? app.getToken : (env.CONTENT_GITHUB_TOKEN ?? ""),
+        ...(app && { onUnauthorized: () => app.invalidate() }),
+        apiBaseUrl: env.GITHUB_API_URL,
       });
+      return new GitHubProvider({ owner, repo, branch: env.CONTENT_BRANCH, contentPath: env.CONTENT_REPO_PATH, client });
     }
   }
 }

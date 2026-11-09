@@ -10,7 +10,10 @@ import { GitProviderError } from "../types";
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 export interface GitHubClientOptions {
-  token: string;
+  /** A static token (PAT) or a function returning a fresh one (GitHub App). */
+  token: string | (() => Promise<string>);
+  /** Called after a 401 so a token source can drop its cached token. */
+  onUnauthorized?: () => void;
   apiBaseUrl?: string;
   fetch?: FetchLike;
   userAgent?: string;
@@ -72,19 +75,22 @@ export class GitHubClient {
   }
 
   private async request(method: string, path: string, body: string | undefined, headers: Record<string, string>) {
+    const token = typeof this.options.token === "string" ? this.options.token : await this.options.token();
     try {
-      return await this.fetchImpl(`${this.baseUrl}${path}`, {
+      const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
         method,
         body,
         cache: "no-store",
         headers: {
           Accept: "application/vnd.github+json",
-          Authorization: `Bearer ${this.options.token}`,
+          Authorization: `Bearer ${token}`,
           "X-GitHub-Api-Version": "2022-11-28",
           "User-Agent": this.options.userAgent ?? "InkGit",
           ...headers,
         },
       });
+      if (response.status === 401) this.options.onUnauthorized?.();
+      return response;
     } catch (error) {
       throw new GitProviderError(`Network error calling GitHub (${method} ${path})`, "io", { cause: error });
     }

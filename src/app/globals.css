@@ -157,7 +157,7 @@ figure[data-rehype-pretty-code-figure] [data-line] {
   @apply px-4;
 }
 figure[data-rehype-pretty-code-figure] [data-highlighted-line] {
-  background: color-mix(in oklch, var(--brand) 12%, transparent);
+  background: color-mix(in oklch, var(--brand) 7%, transparent);
   box-shadow: inset 2px 0 0 var(--brand);
 }
 figure[data-rehype-pretty-code-figure] code[data-line-numbers] > [data-line]::before {

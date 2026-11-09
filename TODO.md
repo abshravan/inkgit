@@ -91,8 +91,28 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done (functionality verified, n
 - [ ] Strip AVIF metadata.
 - [ ] Hour-level scheduling (accept ISO date-times in the editor).
 
-## Phase 5 — Production Readiness
+## Phase 5 — Production Readiness ✅
 
-- [ ] Security review · CSP · rate limiting
-- [ ] Playwright e2e (publish, conflict, restore)
-- [ ] GitHub App credentials · deployment · docs
+- [x] Security review (SECURITY.md) — fixed proxy Host-header SSRF/cache poisoning, action redirect UX
+- [x] Security headers + CSP (static-rendering compatible; trade-off documented)
+- [x] GitHub App authentication (repo-scoped, short-lived tokens) alongside PAT
+- [x] `pnpm content:check` + content-repo workflow template
+- [x] Playwright suite (29 tests: public, admin/local, GitHub) incl. axe (light + dark) and CSP-violation checks
+- [x] Accessibility fixes (code-token contrast, editor focusability)
+- [x] CI: audit, typecheck, lint, format, unit, content check, build, client-bundle secret scan, e2e
+- [x] Dependabot (npm + GitHub Actions)
+- [x] Deployment guide (docs/DEPLOYMENT.md)
+
+## Needs the owner
+
+- [ ] **Live verification against a real GitHub content repository** (repo + token or GitHub App).
+- [ ] **Vercel deployment** following docs/DEPLOYMENT.md, then the post-deploy checklist.
+- [ ] Lighthouse on the deployed site (local article page measured 93–94 performance under simulated throttling).
+- [ ] Real branding in `src/config/site.ts` (name, tagline, author, social links).
+
+## Later
+
+- [ ] Shared cache handler + rate-limit store for multi-instance hosting.
+- [ ] Multiple authors / multiple blogs (data model already carries `author`; would need per-user roles).
+- [ ] Comments and first-party analytics (would introduce PostgreSQL).
+- [ ] Hard 404 status for unknown slugs via `proxy.ts` content lookup.

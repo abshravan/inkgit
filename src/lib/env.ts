@@ -25,6 +25,10 @@ const serverEnvSchema = z
     CONTENT_BRANCH: z.string().min(1).default("main"),
     CONTENT_REPO_PATH: z.string().default(""),
     CONTENT_GITHUB_TOKEN: optionalSecret,
+    // Alternative to a PAT: a GitHub App installed on the content repository.
+    GITHUB_APP_ID: optionalSecret,
+    GITHUB_APP_INSTALLATION_ID: optionalSecret,
+    GITHUB_APP_PRIVATE_KEY: optionalSecret,
     GITHUB_API_URL: z.url().default("https://api.github.com"),
     GITHUB_WEBHOOK_SECRET: optionalSecret,
     // Auth.js reads AUTH_SECRET / AUTH_GITHUB_ID / AUTH_GITHUB_SECRET itself;
@@ -91,6 +95,10 @@ export function getServerEnv(): ServerEnv {
   }
   const { ADMIN_GITHUB_IDS, ...rest } = parsed.data;
   const adminGithubIds = parseAdminIds(ADMIN_GITHUB_IDS);
+  if (process.env.VERCEL && (rest.CONTENT_SOURCE === "local" || rest.MEDIA_STORAGE === "local")) {
+    // Serverless filesystems are read-only and ephemeral: local writes/uploads won't persist.
+    console.warn("[inkgit:env] On Vercel use CONTENT_SOURCE=github and MEDIA_STORAGE=s3 (see docs/DEPLOYMENT.md).");
+  }
   cached = {
     ...rest,
     contentRoot: path.resolve(/* turbopackIgnore: true */ process.cwd(), rest.CONTENT_DIR),

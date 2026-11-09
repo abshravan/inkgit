@@ -3,6 +3,8 @@
 A Git-native blogging platform. **Your content belongs to you. Your repository is your CMS. Your website is your presentation layer.**
 
 - Architecture and decisions: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+- Security model: [`SECURITY.md`](./SECURITY.md)
+- Deployment guide: [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md)
 - Progress: [`TODO.md`](./TODO.md)
 
 ## Status
@@ -11,7 +13,7 @@ A Git-native blogging platform. **Your content belongs to you. Your repository i
 - ✅ Phase 2 — admin dashboard, GitHub sign-in, Markdown editor, drafts and publishing
 - ✅ Phase 3 — GitHub as the content store: atomic commits, conflict detection, history + diff + restore, renames with redirects, categories & tags management, push webhook
 - ✅ Phase 4 — search, RSS, sitemap/robots, JSON-LD + social cards, image uploads (R2/S3), scheduled publishing, optional analytics
-- ⏭️ Phase 5 — production readiness: security review, CSP, e2e suite in CI, GitHub App auth, deployment
+- ✅ Phase 5 — production readiness: security review and headers/CSP, GitHub App auth, `content:check`, Playwright suite in CI, secret-leak check, deployment guide
 
 ## Getting started
 

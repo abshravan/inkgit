@@ -2,7 +2,7 @@
 
 > "Your content belongs to you. Your repository is your CMS. Your website is your presentation layer."
 
-Status: **Approved — Phases 1–4 implemented** · Last updated: 2026-11-09
+Status: **Approved — Phases 1–5 implemented (MVP complete; live GitHub/Vercel verification pending)** · Last updated: 2026-11-09
 
 This document is the source of truth for InkGit's architecture. It is updated whenever an architectural decision changes. Decisions that rest on assumptions are marked **[ASSUMPTION]**; open questions are listed in §12.
 
@@ -453,6 +453,23 @@ Things that differ from, or refine, the original plan:
 - **Analytics**: optional Plausible-compatible script on public pages only, configured by env, no cookies and no database. Postgres stays deferred until a feature needs it.
 - **Next.js behaviour found in e2e**: after `router.replace`, the previous route's UI stays mounted but hidden (state preservation), so a success notice set before navigating was invisible. The editor hands it over via a one-time `sessionStorage` flash.
 - **Verification**: 191 unit tests; a 27-check Playwright run (search, well-formed RSS, sitemap/robots, OG images 1200×630, JSON-LD, scheduling lifecycle, real PNG/JPEG uploads with GPS EXIF removed and still decodable, SVG/disguised rejection, upload auth + CSRF, editor upload → preview → usage-blocked delete, no mobile overflow), plus the Phase 2 (local) and Phase 3 (GitHub) suites re-run green.
+
+## 17. Implementation Notes (Phase 5)
+
+- **Security review** (see `SECURITY.md` for the full threat model and controls):
+  - Fixed a Host-header SSRF / cache-poisoning issue: `proxy.ts` fetched the redirect map from the request's origin. It now uses `SITE_URL` (runtime) or `NEXT_PUBLIC_SITE_URL`, and validates entries.
+  - Server-action POSTs are no longer redirected by the proxy, so they return their own authorization result.
+  - Fixed WCAG AA failures found by axe: Shiki `github-light` orange tokens (≈3:1) were replaced with `github-light-high-contrast`; CodeMirror's scroller wasn't keyboard-reachable.
+- **Headers/CSP** (`src/config/security-headers.ts`, applied in `next.config.ts`): a static CSP that keeps static rendering (trade-off documented), plus nosniff, frame denial, referrer and permissions policies, HSTS, and no `X-Powered-By`.
+- **GitHub App auth** (`modules/git/github/app-auth.ts`): RS256 app JWT via `node:crypto`, installation tokens requested with `repositories: [repo]` and `permissions: {contents: write}`, cached until 5 min before expiry, in-flight deduplication, invalidated on 401. Preferred over a PAT when configured.
+- **`pnpm content:check`** reuses `ContentService` and the production MDX pipeline (run with tsx under the `react-server` condition; the package is now `"type": "module"`). It reports file-relative line numbers. `docs/content-repo-workflow.yml` runs it on the content repository.
+- **Playwright suite** (`tests/e2e`, 29 tests, ~50 s): one production build, three servers (local source, fake GitHub API, GitHub source) with data reset on each run; sessions minted with Auth.js's encoder in global setup. Covers:
+  - public rendering, 404, headers, and a zero-CSP-violation check;
+  - axe in light and dark modes;
+  - search, feeds, cards, mobile;
+  - access control, editor flows, conflicts, autosave, scheduling, media;
+  - every GitHub flow.
+- **CI**: an audit/type/lint/format/unit/content/build job with canary secrets and `check:secrets`, plus a Playwright e2e job. Dependabot for npm and Actions.
 
 ### Known limitations
 

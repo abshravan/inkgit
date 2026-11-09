@@ -30,7 +30,8 @@ export class ContentRenderError extends Error {
 }
 
 const prettyCodeOptions: PrettyCodeOptions = {
-  theme: { light: "github-light", dark: "github-dark-dimmed" },
+  // High-contrast light theme: github-light's orange tokens fail WCAG AA (≈3:1).
+  theme: { light: "github-light-high-contrast", dark: "github-dark-dimmed" },
   keepBackground: false,
   defaultLang: { block: "plaintext", inline: "plaintext" },
 };

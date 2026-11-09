@@ -14,8 +14,16 @@ concurrency:
 
 jobs:
   check:
+    name: Lint, types, unit tests, build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    # Canary values: the build must never inline these into client bundles.
+    env:
+      AUTH_SECRET: ci-canary-auth-secret-0123456789
+      AUTH_GITHUB_SECRET: ci-canary-oauth-secret-abcdef
+      CONTENT_GITHUB_TOKEN: ci-canary-content-token-zyxwvu
+      GITHUB_WEBHOOK_SECRET: ci-canary-webhook-secret-9999
+      MEDIA_S3_SECRET_ACCESS_KEY: ci-canary-s3-secret-7777
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -24,8 +32,34 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --prod --audit-level=high
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm test
+      - run: pnpm content:check
       - run: pnpm build
+      - run: pnpm check:secrets
+
+  e2e:
+    name: End-to-end (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm build
+      - run: pnpm e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7

@@ -44,3 +44,8 @@ next-env.d.ts
 
 # Locally uploaded media (development storage)
 /media-uploads
+
+# Playwright
+/.e2e
+/playwright-report
+/test-results
