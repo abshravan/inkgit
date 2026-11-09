@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { compileSafely } from "@/components/article/article-body";
 import { ArticleView } from "@/components/article/article-view";
+import { siteConfig } from "@/config/site";
+import { serializeJsonLd } from "@/modules/seo/json-ld";
 import { withPlaceholder } from "@/lib/static-params";
 import { getPublishedArticle, listPublishedArticles, listRelatedArticles } from "@/modules/content/queries";
 
@@ -33,8 +35,9 @@ export async function generateMetadata({ params }: PageProps<"/blog/[slug]">): P
       ...(article.updatedAt && { modifiedTime: article.updatedAt }),
       authors: [article.author],
       tags: article.tags.map((tag) => tag.name),
-      ...(article.coverImage && { images: [{ url: article.coverImage, alt: article.coverAlt ?? article.title }] }),
+      images: [{ url: `/og/blog/${article.slug}`, width: 1200, height: 630, alt: article.title }],
     },
+    twitter: { card: "summary_large_image", images: [`/og/blog/${article.slug}`] },
   };
 }
 
@@ -49,5 +52,26 @@ export default async function ArticlePage({ params }: PageProps<"/blog/[slug]">)
     compileSafely(article.body, article.format, article.path),
     listRelatedArticles(article, 3),
   ]);
-  return <ArticleView article={article} outcome={outcome} related={related} />;
+  const url = new URL(`/blog/${article.slug}`, siteConfig.url).toString();
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: article.title,
+    description: article.description,
+    datePublished: article.date,
+    dateModified: article.updatedAt ?? article.date,
+    author: { "@type": "Person", name: article.author },
+    publisher: { "@type": "Organization", name: siteConfig.name },
+    mainEntityOfPage: { "@type": "WebPage", "@id": url },
+    url,
+    image: new URL(`/og/blog/${article.slug}`, siteConfig.url).toString(),
+    keywords: article.tags.map((tag) => tag.name).join(", "),
+    wordCount: article.wordCount,
+  };
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
+      <ArticleView article={article} outcome={outcome} related={related} />
+    </>
+  );
 }

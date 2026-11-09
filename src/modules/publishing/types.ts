@@ -3,7 +3,7 @@ import type { Category, ContentIssue } from "@/modules/content/types";
 
 /** Serializable result types shared by the editorial service, actions and UI. */
 
-export type ArticleStatus = "published" | "draft" | "invalid";
+export type ArticleStatus = "published" | "scheduled" | "draft" | "invalid";
 
 export interface AdminArticleSummary {
   slug: string;

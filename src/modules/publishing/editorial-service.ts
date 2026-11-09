@@ -4,6 +4,7 @@ import { POSTS_DIR } from "@/modules/content/content-service";
 import { splitFrontmatter } from "@/modules/content/parse";
 import { articleFrontmatterSchema } from "@/modules/content/schema";
 import { serializeArticle } from "@/modules/content/serialize";
+import { isScheduled } from "@/modules/content/selectors";
 import { isValidSlug } from "@/modules/content/slug";
 import {
   ConflictError,
@@ -33,6 +34,8 @@ const MAX_BODY_BYTES = 900_000;
 export interface EditorialOptions {
   /** Returns today's date (YYYY-MM-DD, UTC). Injected for deterministic tests. */
   today: () => string;
+  /** Current time in ms (defaults to Date.now). */
+  now?: () => number;
 }
 
 /**
@@ -65,7 +68,11 @@ export class EditorialService {
       slug: article.slug,
       path: article.path,
       title: article.title,
-      status: article.published ? "published" : "draft",
+      status: !article.published
+        ? "draft"
+        : isScheduled(article, (this.options.now ?? Date.now)())
+          ? "scheduled"
+          : "published",
       featured: article.featured,
       date: article.date,
       updatedAt: article.updatedAt ?? null,

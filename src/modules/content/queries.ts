@@ -7,9 +7,12 @@ import {
   selectByCategory,
   selectByTag,
   selectFeatured,
-  selectPublished,
+  liveContentLifetime,
+  nextScheduledAt,
+  selectLive,
   selectRelated,
 } from "./selectors";
+import { searchArticles } from "@/modules/search/search";
 import { isValidSlug } from "./slug";
 import type { Article, Category, ContentIndex, Page, TermWithCount } from "./types";
 
@@ -29,8 +32,23 @@ async function getIndex(): Promise<ContentIndex> {
   return getContentService().loadIndex();
 }
 
+/**
+ * What readers can see right now. Scheduled articles are filtered out, and the
+ * cache lifetime is shortened so the next one appears on time (on the first
+ * request after its date, served stale-while-revalidate).
+ */
+async function getLiveContent(): Promise<{ articles: Article[]; categories: Category[] }> {
+  "use cache";
+  cacheTag(CONTENT_CACHE_TAG);
+  const index = await getIndex();
+  const now = Date.now();
+  const next = nextScheduledAt(index.articles, now);
+  cacheLife(liveContentLifetime(next === null ? null : (next - now) / 1000));
+  return { articles: selectLive(index.articles, now), categories: index.categories };
+}
+
 async function getPublishedArticles(): Promise<Article[]> {
-  return selectPublished((await getIndex()).articles);
+  return (await getLiveContent()).articles;
 }
 
 export async function listPublishedArticles(): Promise<Article[]> {
@@ -51,6 +69,14 @@ export async function getRedirectMap(): Promise<Record<string, string>> {
   return map;
 }
 
+/** Search results are cached per normalized query and refreshed with content. */
+export async function searchPublishedArticles(query: string): Promise<Article[]> {
+  "use cache";
+  cacheTag(CONTENT_CACHE_TAG);
+  cacheLife("hours");
+  return searchArticles(await getPublishedArticles(), query);
+}
+
 export async function listFeaturedArticles(limit: number): Promise<Article[]> {
   return selectFeatured(await getPublishedArticles(), limit);
 }
@@ -64,8 +90,8 @@ export async function listTags(): Promise<TermWithCount[]> {
 }
 
 export async function listCategories(): Promise<TermWithCount<Category>[]> {
-  const index = await getIndex();
-  return countCategories(selectPublished(index.articles), index.categories);
+  const { articles, categories } = await getLiveContent();
+  return countCategories(articles, categories);
 }
 
 export async function getTagWithArticles(slug: string) {
@@ -76,9 +102,9 @@ export async function getTagWithArticles(slug: string) {
 }
 
 export async function getCategoryWithArticles(slug: string) {
-  const index = await getIndex();
-  const term = index.categories.find((category) => category.slug === slug);
-  return term ? { term, articles: selectByCategory(selectPublished(index.articles), slug) } : null;
+  const { articles, categories } = await getLiveContent();
+  const term = categories.find((category) => category.slug === slug);
+  return term ? { term, articles: selectByCategory(articles, slug) } : null;
 }
 
 export async function getPage(slug: string): Promise<Page | null> {

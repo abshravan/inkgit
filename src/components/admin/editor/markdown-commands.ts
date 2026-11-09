@@ -151,3 +151,17 @@ export function insertTable(): MarkdownCommand {
     };
   };
 }
+
+/** Inserts an image reference at each cursor (used after uploads). */
+export function insertImage(url: string, alt = "image"): MarkdownCommand {
+  const safeAlt = alt.replace(/[[\]\n]/g, " ").trim() || "image";
+  return (state) =>
+    state.changeByRange((range) => {
+      const label = range.empty ? safeAlt : state.sliceDoc(range.from, range.to).replace(/[[\]\n]/g, " ");
+      const text = `![${label}](${url})`;
+      return {
+        changes: { from: range.from, to: range.to, insert: text },
+        range: EditorSelection.range(range.from + 2, range.from + 2 + label.length),
+      };
+    });
+}

@@ -5,7 +5,12 @@ import { z } from "zod";
 import { MdxContent } from "@/components/mdx/mdx-content";
 import { commitAuthorFor, requireAdminAction, UnauthorizedError } from "@/modules/auth/guards";
 import { signIn, signOut } from "@/modules/auth/auth";
-import { getEditorialService, getTaxonomyService } from "@/modules/content/container";
+import {
+  getContentService,
+  getEditorialService,
+  getMediaService,
+  getTaxonomyService,
+} from "@/modules/content/container";
 import { articleFormSchema } from "@/modules/content/editable";
 import { CONTENT_CACHE_TAG } from "@/modules/content/queries";
 import type { TaxonomyResult } from "@/modules/publishing/taxonomy-service";
@@ -130,6 +135,17 @@ export async function taxonomyAction(input: unknown): Promise<TaxonomyResult> {
   const result = await getTaxonomyService().apply(parsed.data, commitAuthorFor(admin));
   if (result.status === "saved" && result.filesChanged > 0) refreshPublicSite();
   return result;
+}
+
+const deleteMediaInputSchema = z.object({ key: z.string().max(100) });
+
+export async function deleteMediaAction(input: unknown): Promise<{ ok: true } | { ok: false; message: string }> {
+  const admin = await requireAdminAction().catch(() => null);
+  if (!admin) return { ok: false, message: new UnauthorizedError().message };
+  const parsed = deleteMediaInputSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: "Invalid request" };
+  const { articles } = await getContentService().loadIndex();
+  return getMediaService().delete(parsed.data.key, articles);
 }
 
 const previewInputSchema = z.object({ body: z.string().max(MAX_BODY_CHARS), format: z.enum(["md", "mdx"]) });

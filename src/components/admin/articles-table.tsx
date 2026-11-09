@@ -14,6 +14,7 @@ import { StatusBadge } from "./status-badge";
 const STATUS_FILTERS = [
   { value: "all", label: "All" },
   { value: "published", label: "Published" },
+  { value: "scheduled", label: "Scheduled" },
   { value: "draft", label: "Drafts" },
   { value: "attention", label: "Needs attention" },
 ] as const;

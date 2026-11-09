@@ -6,6 +6,7 @@ import {
   Heading2,
   Heading3,
   Image as ImageIcon,
+  ImageUp,
   Italic,
   Link,
   List,
@@ -57,7 +58,15 @@ const groups: ToolbarItem[][] = [
   ],
 ];
 
-export function EditorToolbar({ onCommand }: { onCommand: (command: MarkdownCommand) => void }) {
+export function EditorToolbar({
+  onCommand,
+  onUpload,
+  uploading = false,
+}: {
+  onCommand: (command: MarkdownCommand) => void;
+  onUpload?: (files: File[]) => void;
+  uploading?: boolean;
+}) {
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
   return (
     <div role="toolbar" aria-label="Formatting" className="flex flex-wrap items-center gap-0.5">
@@ -83,6 +92,27 @@ export function EditorToolbar({ onCommand }: { onCommand: (command: MarkdownComm
           })}
         </div>
       ))}
+      {onUpload && (
+        <label
+          title="Upload image (or paste / drop into the editor)"
+          className="inline-flex size-8 cursor-pointer items-center justify-center rounded-md hover:bg-accent has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50 aria-disabled:opacity-50"
+          aria-disabled={uploading}
+        >
+          <ImageUp className="size-4" aria-hidden />
+          <span className="sr-only">Upload image</span>
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp,image/avif"
+            className="sr-only"
+            disabled={uploading}
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              event.target.value = "";
+              if (files.length) onUpload(files);
+            }}
+          />
+        </label>
+      )}
     </div>
   );
 }

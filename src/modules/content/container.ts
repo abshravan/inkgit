@@ -5,6 +5,10 @@ import { GitHubClient } from "@/modules/git/github/github-client";
 import { GitHubProvider } from "@/modules/git/github/github-provider";
 import { LocalFsProvider } from "@/modules/git/local/local-fs-provider";
 import type { GitProvider } from "@/modules/git/types";
+import { LocalMediaStorage } from "@/modules/media/local-media-storage";
+import { MediaService } from "@/modules/media/media-service";
+import { S3MediaStorage } from "@/modules/media/s3-media-storage";
+import type { MediaStorage } from "@/modules/media/storage";
 import { EditorialService } from "@/modules/publishing/editorial-service";
 import { TaxonomyService } from "@/modules/publishing/taxonomy-service";
 import { ContentService } from "./content-service";
@@ -75,4 +79,27 @@ let taxonomyService: TaxonomyService | undefined;
 export function getTaxonomyService(): TaxonomyService {
   taxonomyService ??= new TaxonomyService(getProvider(), getContentService());
   return taxonomyService;
+}
+
+function createMediaStorage(): MediaStorage {
+  const env = getServerEnv();
+  if (env.MEDIA_STORAGE === "s3") {
+    // Presence of these values is validated by the env schema.
+    return new S3MediaStorage({
+      endpoint: env.MEDIA_S3_ENDPOINT ?? "",
+      bucket: env.MEDIA_S3_BUCKET ?? "",
+      region: env.MEDIA_S3_REGION,
+      accessKeyId: env.MEDIA_S3_ACCESS_KEY_ID ?? "",
+      secretAccessKey: env.MEDIA_S3_SECRET_ACCESS_KEY ?? "",
+      publicUrl: env.MEDIA_PUBLIC_URL ?? "",
+    });
+  }
+  return new LocalMediaStorage(env.mediaRoot);
+}
+
+let mediaService: MediaService | undefined;
+
+export function getMediaService(): MediaService {
+  mediaService ??= new MediaService(createMediaStorage(), { maxBytes: getServerEnv().MEDIA_MAX_BYTES });
+  return mediaService;
 }

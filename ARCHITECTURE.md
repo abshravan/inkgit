@@ -2,7 +2,7 @@
 
 > "Your content belongs to you. Your repository is your CMS. Your website is your presentation layer."
 
-Status: **Approved — Phases 1–3 implemented** · Last updated: 2026-11-09
+Status: **Approved — Phases 1–4 implemented** · Last updated: 2026-11-09
 
 This document is the source of truth for InkGit's architecture. It is updated whenever an architectural decision changes. Decisions that rest on assumptions are marked **[ASSUMPTION]**; open questions are listed in §12.
 
@@ -443,11 +443,24 @@ Things that differ from, or refine, the original plan:
 - **Diffs**: `lib/diff.ts` (jsdiff line diff with `git`-style context collapsing) rendered by `DiffView`, used for history (current → selected version) and conflicts (repository → yours).
 - **Verification:** 171 unit tests; a Playwright run against the production build using the fake GitHub over HTTP (23 checks: commit count/message/author, history, diff, restore, conflict diff, webhook signature/ping/relevance/freshness, rename + 308, taxonomy commits), plus the Phase 2 run against the local source (22 checks), all passing.
 
+## 16. Implementation Notes (Phase 4)
+
+- **Scheduled publishing** without cron. Public queries read one cached `getLiveContent()` snapshot that filters `published && date <= now` and calls `cacheLife()` with a lifetime ending at the next scheduled go-live (clamped to 1 min–1 h; `expire` stays 1 day so pages remain prerenderable). Admin shows a **Scheduled** status. Limitation: date granularity is a day (00:00 UTC), and the first request after go-live triggers the refresh (stale-while-revalidate).
+- **Search**: MiniSearch (fuzzy + prefix, AND, title ×3, tags/categories ×2) over live articles, cached per normalized query and tagged `content`. Server-rendered `/search?q=` (no client JS, `noindex`).
+- **Feeds/SEO**: pure `buildRssFeed` (deterministic: dates come from content, never the clock), `sitemap.ts`, `robots.ts`, JSON-LD serialized with `<`/U+2028/U+2029 escaped. Article social cards are a route handler at the stable URL `/og/blog/<slug>`: the `opengraph-image` file convention adds a hashed suffix on dynamic routes, which the JSON-LD couldn't reference.
+- **Media** (`modules/media/`): `MediaStorage` interface with `LocalMediaStorage` (folder outside `public/`, served by `app/media/[...key]` with `nosniff` + `default-src 'none'`; `next start` doesn't serve files added to `public/` after build, found in e2e) and `S3MediaStorage` (SigV4 via aws4fetch; no AWS SDK). `MediaService`: magic-byte detection (SVG rejected), size limit, metadata stripping without re-encoding (JPEG APP1/APP13/COM, PNG text/eXIf/tIME chunks, WebP EXIF/XMP chunks + VP8X flags + RIFF size), content-hash keys, and usage-aware deletion. Upload goes through a route handler (body limit), guarded by session, same-origin check and a per-admin rate limit (30/min, in-memory).
+- **Editor uploads**: toolbar button plus paste/drop into CodeMirror; inserts `![alt](url)` with the alt text selected.
+- **Analytics**: optional Plausible-compatible script on public pages only, configured by env, no cookies and no database. Postgres stays deferred until a feature needs it.
+- **Next.js behaviour found in e2e**: after `router.replace`, the previous route's UI stays mounted but hidden (state preservation), so a success notice set before navigating was invisible. The editor hands it over via a one-time `sessionStorage` flash.
+- **Verification**: 191 unit tests; a 27-check Playwright run (search, well-formed RSS, sitemap/robots, OG images 1200×630, JSON-LD, scheduling lifecycle, real PNG/JPEG uploads with GPS EXIF removed and still decodable, SVG/disguised rejection, upload auth + CSRF, editor upload → preview → usage-blocked delete, no mobile overflow), plus the Phase 2 (local) and Phase 3 (GitHub) suites re-run green.
+
 ### Known limitations
 
 - **Soft 404 for unlisted params.** With Partial Prefetching, a URL not returned by `generateStaticParams` (e.g. `/blog/unknown`) streams the 404 UI with `<meta name="robots" content="noindex">` but HTTP **200** — documented Next.js behaviour once streaming starts. Drafts are never rendered. A `proxy.ts` slug check can return a hard 404 later if needed.
 - **Not yet verified against real GitHub.** All GitHub behaviour is tested against a fake that models the API; a live run against a real repository is pending a repository + token.
 - **HEAD requests to renamed URLs** may return the cached page (200) instead of the 308; `GET` (what browsers and crawlers use) is correct.
 - **First public request after a publish can be stale.** After `updateTag("content")`, the first request to an already-prerendered public page returned the previous version, and the next request (within ~1 s) was fresh, measured consistently with `next start`. Adding `revalidatePath("/", "layout")` made this worse, so it was not kept. The webhook's `revalidateTag(..., { expire: 0 })` shows the same one-stale-response pattern. To re-check on Vercel (Phase 5).
+- **AVIF and GIF metadata is not stripped** (GIF has no EXIF; AVIF EXIF is rare). The RSS feed carries summaries, not full content.
+- **Rate limiting is per process** (in-memory). Fine for a single admin; a shared store would be needed for multi-instance abuse protection.
 - **Local source is for development.** Serverless hosts have read-only filesystems; production uses `CONTENT_SOURCE=github`.
 - **Performance.** Lighthouse (simulated mobile, local `next start`): home 94–96, article 93–94, accessibility/best-practices/SEO 100. Article LCP is dominated by render delay under throttling; to be re-measured on Vercel (CDN + compression) in Phase 5.

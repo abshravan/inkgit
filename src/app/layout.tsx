@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   description: siteConfig.description,
   authors: [{ name: siteConfig.author.name }],
   openGraph: { type: "website", siteName: siteConfig.name, locale: siteConfig.locale },
+  alternates: { types: { "application/rss+xml": [{ url: "/rss.xml", title: `${siteConfig.name} RSS` }] } },
   twitter: { card: "summary_large_image" },
 };
 

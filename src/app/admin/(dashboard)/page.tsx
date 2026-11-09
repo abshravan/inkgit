@@ -1,4 +1,4 @@
-import { CircleAlert, FileCheck2, FilePen, Plus } from "lucide-react";
+import { CalendarClock, CircleAlert, FileCheck2, FilePen, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -39,6 +39,7 @@ async function OverviewContent() {
   const source = describeContentSource();
   const published = articles.filter((article) => article.status === "published");
   const drafts = articles.filter((article) => article.status === "draft");
+  const scheduled = articles.filter((article) => article.status === "scheduled");
   const needsAttention = articles.filter((article) => article.issues.length > 0);
   const recent = [...articles]
     .filter((article) => article.status !== "invalid")
@@ -47,6 +48,7 @@ async function OverviewContent() {
 
   const stats = [
     { label: "Published", value: published.length, Icon: FileCheck2, href: "/admin/articles?status=published" },
+    { label: "Scheduled", value: scheduled.length, Icon: CalendarClock, href: "/admin/articles?status=scheduled" },
     { label: "Drafts", value: drafts.length, Icon: FilePen, href: "/admin/articles?status=draft" },
     {
       label: "Need attention",
@@ -73,7 +75,7 @@ async function OverviewContent() {
           <span className="font-mono text-foreground">{source.label}</span>
         )}
       </p>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map(({ label, value, Icon, href }) => (
           <Link
             key={label}

@@ -9,6 +9,30 @@ export function selectPublished(articles: readonly Article[]): Article[] {
   return articles.filter((article) => article.published);
 }
 
+/**
+ * Articles visible to readers at `now`: published, and not scheduled for a
+ * later date. A published article with a future `date` goes live on that date
+ * (date-only values mean 00:00 UTC).
+ */
+export function selectLive(articles: readonly Article[], now: number): Article[] {
+  return articles.filter((article) => article.published && Date.parse(article.date) <= now);
+}
+
+/** Published articles waiting for their date. */
+export function isScheduled(article: Pick<Article, "published" | "date">, now: number): boolean {
+  return article.published && Date.parse(article.date) > now;
+}
+
+/** When the next scheduled article goes live (epoch ms), or null. */
+export function nextScheduledAt(articles: readonly Article[], now: number): number | null {
+  let next: number | null = null;
+  for (const article of articles) {
+    const at = Date.parse(article.date);
+    if (article.published && at > now && (next === null || at < next)) next = at;
+  }
+  return next;
+}
+
 export function selectFeatured(articles: readonly Article[], limit: number): Article[] {
   return articles.filter((article) => article.featured).slice(0, limit);
 }
@@ -64,4 +88,21 @@ export function selectRelated(articles: readonly Article[], target: Article, lim
     .sort((a, b) => b.score - a.score || a.recencyRank - b.recencyRank)
     .slice(0, limit)
     .map(({ candidate }) => candidate);
+}
+
+const HOUR = 3600;
+
+/**
+ * Cache lifetime for live content: normally an hour, but shortened so it ends
+ * when the next scheduled article should go live (never below a minute, and
+ * `expire` stays long so pages remain prerenderable).
+ */
+export function liveContentLifetime(secondsUntilNextScheduled: number | null): {
+  stale: number;
+  revalidate: number;
+  expire: number;
+} {
+  const revalidate =
+    secondsUntilNextScheduled === null ? HOUR : Math.min(HOUR, Math.max(60, Math.ceil(secondsUntilNextScheduled)));
+  return { stale: Math.min(300, revalidate), revalidate, expire: 24 * HOUR };
 }

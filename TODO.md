@@ -72,12 +72,24 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done (functionality verified, n
 - [ ] `pnpm content:check` + reusable GitHub Action for the content repository (validate frontmatter/MDX on PRs).
 - [ ] Preserve YAML comments in `taxonomy.yml` when editing.
 
-## Phase 4 — Advanced Features
+## Phase 4 — Advanced Features ✅
 
-- [ ] Search · RSS · sitemap · robots · OG images · JSON-LD
-- [ ] Media upload + library (validation, R2 storage adapter)
-- [ ] Scheduled publishing · analytics
-- [x] Related articles (basic, category/tag overlap) — done in Phase 1
+- [x] Search (MiniSearch, server-rendered, cached per query)
+- [x] RSS 2.0 feed + autodiscovery · sitemap.xml · robots.txt
+- [x] SEO: canonical/OG/Twitter metadata, generated social cards, BlogPosting JSON-LD
+- [x] Media: upload (route handler), content validation, metadata stripping, content-hash keys, local + S3/R2 storage, library page, usage-aware delete
+- [x] Editor image upload (button, paste, drop)
+- [x] Scheduled publishing (future-dated articles, self-expiring cache, admin status)
+- [x] Optional analytics (Plausible-compatible, env-configured)
+- [x] Related articles — Phase 1
+- [x] Verified: 191 unit tests, 27-check e2e + Phase 2/3 regression runs
+
+### Phase 4 follow-ups
+
+- [ ] Full-content RSS (`content:encoded`) — needs MDX → HTML rendering outside React trees.
+- [ ] Image dimensions in Markdown output (width/height) to avoid layout shift; responsive variants.
+- [ ] Strip AVIF metadata.
+- [ ] Hour-level scheduling (accept ISO date-times in the editor).
 
 ## Phase 5 — Production Readiness
 

@@ -10,7 +10,8 @@ A Git-native blogging platform. **Your content belongs to you. Your repository i
 - ✅ Phase 1 — public site over local content
 - ✅ Phase 2 — admin dashboard, GitHub sign-in, Markdown editor, drafts and publishing
 - ✅ Phase 3 — GitHub as the content store: atomic commits, conflict detection, history + diff + restore, renames with redirects, categories & tags management, push webhook
-- ⏭️ Phase 4 — search, RSS, sitemap, SEO, media uploads, scheduled publishing
+- ✅ Phase 4 — search, RSS, sitemap/robots, JSON-LD + social cards, image uploads (R2/S3), scheduled publishing, optional analytics
+- ⏭️ Phase 5 — production readiness: security review, CSP, e2e suite in CI, GitHub App auth, deployment
 
 ## Getting started
 
@@ -58,6 +59,34 @@ With `CONTENT_SOURCE=local` the editor writes to the `content/` folder (good for
 Every save is a Git commit authored by the signed-in admin, e.g. `content(publish): hello-world`. If a file changed on GitHub since you opened it, InkGit shows a diff and asks before overwriting. Version history, restore (as a new commit), renames (old URLs redirect with 308) and category/tag changes all go through the same conditional, atomic commits.
 
 > The first time InkGit saves a hand-written file it normalizes the frontmatter (quoted strings, block lists, fixed key order), so that first diff is larger than the edit itself. Quoting is deliberate: unquoted values such as `yes` or `on` are read as booleans by YAML 1.1 parsers.
+
+## Images
+
+Upload images from **Admin → Media**, with the editor's upload button, or by pasting or dropping them into the editor. Files are:
+
+- **Checked by content.** Only PNG, JPEG, GIF, WebP and AVIF are accepted, identified by their bytes; SVG and disguised files are rejected.
+- **Size-limited** (`MEDIA_MAX_BYTES`, default 5 MB).
+- **Stripped of metadata** without re-encoding: EXIF including GPS, XMP, IPTC and comments are removed from JPEG, PNG and WebP. Colour profiles are kept.
+- **Stored under a content hash**, e.g. `2026/11/3f2a9c1b7d4e5f60.webp`, so file names are never user-controlled and duplicates collapse.
+
+Images live outside Git; articles reference them by URL. Images still used by an article can't be deleted.
+
+For production, use Cloudflare R2 (or any S3-compatible bucket):
+
+1. Create a bucket and an API token with Object Read & Write.
+2. Give the bucket a public domain.
+3. Set `MEDIA_STORAGE=s3` and the `MEDIA_S3_*` / `MEDIA_PUBLIC_URL` variables.
+
+## Scheduling
+
+Publish an article with a future `date` and it's **scheduled**: hidden from the site, feeds and sitemap until that date (00:00 UTC). The cache lifetime shrinks to end at the next go-live time; the first request after that refreshes the site.
+
+## Feeds and SEO
+
+- `/rss.xml`: RSS 2.0 summaries, linked from every page.
+- `/sitemap.xml` and `/robots.txt`. The admin and API routes are disallowed.
+- Canonical URLs, Open Graph/Twitter metadata, a generated social card per article (`/og/blog/<slug>`) and `BlogPosting` JSON-LD.
+- `/search`: server-side full-text search (titles and tags weighted, typo tolerant).
 
 ### Testing without a real repository
 

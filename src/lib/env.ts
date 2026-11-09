@@ -33,8 +33,34 @@ const serverEnvSchema = z
     AUTH_GITHUB_ID: optionalSecret,
     AUTH_GITHUB_SECRET: optionalSecret,
     ADMIN_GITHUB_IDS: z.string().optional(),
+    // Media storage: "local" (public/media, development) or "s3" (R2/S3-compatible).
+    MEDIA_STORAGE: z.enum(["local", "s3"]).default("local"),
+    MEDIA_DIR: z.string().min(1).default("media-uploads"),
+    MEDIA_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(20 * 1024 * 1024)
+      .default(5 * 1024 * 1024),
+    MEDIA_S3_ENDPOINT: z.url().optional(),
+    MEDIA_S3_BUCKET: z.string().min(1).optional(),
+    MEDIA_S3_REGION: z.string().min(1).default("auto"),
+    MEDIA_S3_ACCESS_KEY_ID: optionalSecret,
+    MEDIA_S3_SECRET_ACCESS_KEY: optionalSecret,
+    MEDIA_PUBLIC_URL: z.url({ protocol: /^https$/ }).optional(),
   })
   .superRefine((env, ctx) => {
+    if (env.MEDIA_STORAGE === "s3") {
+      for (const key of [
+        "MEDIA_S3_ENDPOINT",
+        "MEDIA_S3_BUCKET",
+        "MEDIA_S3_ACCESS_KEY_ID",
+        "MEDIA_S3_SECRET_ACCESS_KEY",
+        "MEDIA_PUBLIC_URL",
+      ] as const) {
+        if (!env[key]) ctx.addIssue({ code: "custom", path: [key], message: "is required when MEDIA_STORAGE=s3" });
+      }
+    }
     if (env.CONTENT_SOURCE !== "github") return;
     if (!env.CONTENT_REPO)
       ctx.addIssue({ code: "custom", path: ["CONTENT_REPO"], message: "is required when CONTENT_SOURCE=github" });
@@ -49,6 +75,7 @@ const serverEnvSchema = z
 
 export type ServerEnv = Omit<z.infer<typeof serverEnvSchema>, "ADMIN_GITHUB_IDS"> & {
   contentRoot: string;
+  mediaRoot: string;
   adminGithubIds: ReadonlySet<string>;
   /** True when GitHub sign-in can work and at least one admin is configured. */
   authConfigured: boolean;
@@ -67,6 +94,7 @@ export function getServerEnv(): ServerEnv {
   cached = {
     ...rest,
     contentRoot: path.resolve(/* turbopackIgnore: true */ process.cwd(), rest.CONTENT_DIR),
+    mediaRoot: path.resolve(/* turbopackIgnore: true */ process.cwd(), rest.MEDIA_DIR),
     adminGithubIds,
     authConfigured: Boolean(
       rest.AUTH_SECRET && rest.AUTH_GITHUB_ID && rest.AUTH_GITHUB_SECRET && adminGithubIds.size > 0,

@@ -1,4 +1,4 @@
-import { PenLine } from "lucide-react";
+import { PenLine, Search } from "lucide-react";
 import Link from "next/link";
 import { siteConfig } from "@/config/site";
 import { Container } from "./container";
@@ -23,6 +23,13 @@ export function SiteHeader() {
               </NavLink>
             ))}
           </nav>
+          <Link
+            href="/search"
+            aria-label="Search"
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Search className="size-4" />
+          </Link>
           <ThemeToggle />
         </div>
       </Container>

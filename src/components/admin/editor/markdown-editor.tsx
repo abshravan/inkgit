@@ -52,22 +52,25 @@ export function MarkdownEditor({
   initialValue,
   onChange,
   onSave,
+  onFiles,
   ref,
   label = "Article body",
 }: {
   initialValue: string;
   onChange: (value: string) => void;
   onSave?: () => void;
+  /** Image files pasted or dropped into the editor. */
+  onFiles?: (files: File[]) => void;
   ref?: Ref<MarkdownEditorHandle>;
   label?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   // Latest callbacks without re-creating the editor on every render.
-  const callbacks = useRef({ onChange, onSave });
+  const callbacks = useRef({ onChange, onSave, onFiles });
   useEffect(() => {
-    callbacks.current = { onChange, onSave };
-  }, [onChange, onSave]);
+    callbacks.current = { onChange, onSave, onFiles };
+  }, [onChange, onSave, onFiles]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -105,6 +108,24 @@ export function MarkdownEditor({
             ...historyKeymap,
             ...searchKeymap,
           ]),
+          EditorView.domEventHandlers({
+            paste(event) {
+              const files = imageFiles(event.clipboardData?.files);
+              if (!files.length || !callbacks.current.onFiles) return false;
+              event.preventDefault();
+              callbacks.current.onFiles(files);
+              return true;
+            },
+            drop(event, view) {
+              const files = imageFiles(event.dataTransfer?.files);
+              if (!files.length || !callbacks.current.onFiles) return false;
+              event.preventDefault();
+              const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+              if (pos !== null) view.dispatch({ selection: { anchor: pos } });
+              callbacks.current.onFiles(files);
+              return true;
+            },
+          }),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) callbacks.current.onChange(update.state.doc.toString());
           }),
@@ -148,4 +169,8 @@ export function MarkdownEditor({
       className="min-h-[60vh] md:h-full md:min-h-0 [&_.cm-editor]:min-h-[60vh] md:[&_.cm-editor]:min-h-full"
     />
   );
+}
+
+function imageFiles(list: FileList | undefined | null): File[] {
+  return list ? Array.from(list).filter((file) => file.type.startsWith("image/")) : [];
 }

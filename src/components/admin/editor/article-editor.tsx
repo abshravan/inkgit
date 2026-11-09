@@ -19,6 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { deleteLocalDraft, loadLocalDraft, saveLocalDraft, type LocalDraft } from "@/lib/local-drafts";
+import { altFromFilename, uploadImage } from "@/lib/upload-client";
 import { cn } from "@/lib/utils";
 import type { ArticleFormValues } from "@/modules/content/editable";
 import { serializeArticle } from "@/modules/content/serialize";
@@ -29,6 +30,7 @@ import { countWords, estimateReadingTime } from "@/modules/rendering/text-stats"
 import { ConflictDialog, type ConflictState } from "./conflict-dialog";
 import { EditorToolbar } from "./editor-toolbar";
 import { FrontmatterPanel } from "./frontmatter-panel";
+import { insertImage } from "./markdown-commands";
 import { MarkdownEditor, type MarkdownEditorHandle } from "./markdown-editor";
 import { PreviewPane } from "./preview-pane";
 
@@ -52,6 +54,23 @@ type ViewMode = "write" | "split" | "preview";
 type Notice = { tone: "success" | "error" | "info"; text: string } | null;
 
 const AUTOSAVE_MS = 1000;
+const FLASH_KEY = "inkgit:editor-flash";
+
+/**
+ * One-time message carried across the navigation from /new to the article's
+ * URL. Next.js keeps the previous route's UI mounted but hidden, so the
+ * editor that set the notice is not the one the author sees afterwards.
+ */
+function takeFlash(): Notice {
+  try {
+    const raw = sessionStorage.getItem(FLASH_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(FLASH_KEY);
+    return JSON.parse(raw) as Notice;
+  } catch {
+    return null;
+  }
+}
 const WORDS_PER_MINUTE = 225;
 
 export function ArticleEditor({
@@ -83,12 +102,26 @@ export function ArticleEditor({
   const [localSavedAt, setLocalSavedAt] = useState<string | null>(null);
   const [view, setView] = useState<ViewMode>("split");
   const [isSaving, startSaving] = useTransition();
+  const [uploading, setUploading] = useState(false);
   const draftKey = `article:${mode === "edit" ? initial.slug : "new"}`;
 
   const stats = useMemo(
     () => ({ words: countWords(body), minutes: estimateReadingTime(body, WORDS_PER_MINUTE) }),
     [body],
   );
+
+  useEffect(() => {
+    // Read after mount (sessionStorage doesn't exist during SSR), applied
+    // asynchronously like the IndexedDB restore below.
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      const flash = takeFlash();
+      if (flash && !cancelled) setNotice(flash);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ---- Local autosave (IndexedDB) -------------------------------------------------
   useEffect(() => {
@@ -127,6 +160,23 @@ export function ArticleEditor({
   const onBodyChange = useCallback((next: string) => {
     setBody(next);
     setDirty(true);
+  }, []);
+
+  const onFiles = useCallback(async (files: File[]) => {
+    setUploading(true);
+    setNotice({ tone: "info", text: `Uploading ${files.length} image${files.length === 1 ? "" : "s"}…` });
+    const failures: string[] = [];
+    for (const file of files) {
+      const result = await uploadImage(file);
+      if (result.ok) editorRef.current?.run(insertImage(result.url, altFromFilename(file.name)));
+      else failures.push(`${file.name}: ${result.error}`);
+    }
+    setUploading(false);
+    setNotice(
+      failures.length
+        ? { tone: "error", text: failures.join(" · ") }
+        : { tone: "success", text: "Image uploaded. Edit the alt text between the brackets." },
+    );
   }, []);
 
   const onValuesChange = (next: ArticleFormValues) => {
@@ -172,12 +222,23 @@ export function ArticleEditor({
         setPublished(result.published);
         void deleteLocalDraft(draftKey);
         setLocalSavedAt(null);
-        setNotice({
-          tone: "success",
-          text: result.published ? "Published. The public site is updated." : "Draft saved.",
-        });
+        const scheduledFor =
+          result.published && values.date > new Date().toISOString().slice(0, 10) ? values.date : null;
+        const noticeText = scheduledFor
+          ? `Scheduled. It goes live on ${scheduledFor} (00:00 UTC).`
+          : result.published
+            ? "Published. The public site is updated."
+            : "Draft saved.";
+        setNotice({ tone: "success", text: noticeText });
         // The editor already holds the saved state; only a new article needs its permanent URL.
-        if (mode === "create") router.replace(`/admin/articles/${result.slug}`);
+        if (mode === "create") {
+          try {
+            sessionStorage.setItem(FLASH_KEY, JSON.stringify({ tone: "success", text: noticeText }));
+          } catch {
+            // Storage unavailable: the status badge still shows the result.
+          }
+          router.replace(`/admin/articles/${result.slug}`);
+        }
         return;
       }
       case "invalid":
@@ -275,7 +336,9 @@ export function ArticleEditor({
         </Button>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <h1 className="truncate font-semibold">{values.title || "Untitled article"}</h1>
-          <Badge variant={published ? "default" : "secondary"}>{published ? "Published" : "Draft"}</Badge>
+          <Badge variant={published ? "default" : "secondary"}>
+            {published ? (values.date > new Date().toISOString().slice(0, 10) ? "Scheduled" : "Published") : "Draft"}
+          </Badge>
           <span className="hidden text-xs text-muted-foreground sm:inline" aria-live="polite">
             {isSaving ? "Saving…" : dirty ? "Unsaved changes" : baseSha ? "All changes saved" : ""}
           </span>
@@ -344,7 +407,11 @@ export function ArticleEditor({
       <div className="grid min-h-0 flex-1 md:overflow-hidden xl:grid-cols-[minmax(0,1fr)_20rem]">
         <section aria-label="Content" className="flex min-h-0 min-w-0 flex-col">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b px-2 py-1.5 sm:px-4">
-            <EditorToolbar onCommand={(command) => editorRef.current?.run(command)} />
+            <EditorToolbar
+              onCommand={(command) => editorRef.current?.run(command)}
+              onUpload={onFiles}
+              uploading={uploading}
+            />
             <div className="flex items-center gap-0.5 rounded-md border p-0.5" role="group" aria-label="View mode">
               {(
                 [
@@ -379,6 +446,7 @@ export function ArticleEditor({
                 initialValue={initial.body}
                 onChange={onBodyChange}
                 onSave={onShortcutSave}
+                onFiles={onFiles}
               />
             </div>
             <div
