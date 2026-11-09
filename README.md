@@ -2,6 +2,7 @@
 
 A Git-native blogging platform. **Your content belongs to you. Your repository is your CMS. Your website is your presentation layer.**
 
+- **Step-by-step setup guide: [`docs/SETUP.md`](./docs/SETUP.md)**
 - Architecture and decisions: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
 - Security model: [`SECURITY.md`](./SECURITY.md)
 - Deployment guide: [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md)
