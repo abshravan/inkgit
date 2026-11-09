@@ -1,0 +1,56 @@
+---
+title: "TypeScript Patterns for Safer Code"
+description: "Discriminated unions, branded types, and exhaustive checks that catch bugs before they ship."
+date: "2026-10-12"
+tags:
+  - TypeScript
+  - Best Practices
+categories:
+  - Engineering
+published: true
+---
+
+TypeScript's type system can encode surprisingly strong guarantees. Here are three patterns I reach for constantly.
+
+## Discriminated unions for results
+
+Instead of throwing for expected failures, return a value that *forces* the caller to handle both cases:
+
+```ts title="result.ts"
+type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
+
+function parsePort(input: string): Result<number, string> {
+  const port = Number(input);
+  return Number.isInteger(port) && port > 0 && port < 65536
+    ? { ok: true, value: port }
+    : { ok: false, error: `Invalid port: ${input}` };
+}
+```
+
+## Branded types
+
+A `string` that has been validated is not the same as any `string`. Brands make that difference visible to the compiler:
+
+```ts
+type Slug = string & { readonly __brand: "Slug" };
+
+function toSlug(value: string): Slug | null {
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value) ? (value as Slug) : null;
+}
+```
+
+## Exhaustive switches
+
+```ts
+function assertNever(value: never): never {
+  throw new Error(`Unexpected value: ${JSON.stringify(value)}`);
+}
+```
+
+Add a new variant to a union and every `switch` that forgot it becomes a compile error.
+
+## Shell commands too
+
+```bash
+pnpm tsc --noEmit
+```

@@ -1,0 +1,35 @@
+---
+title: "Git Is the Best CMS You Already Use"
+description: "Why storing blog posts as Markdown in a Git repository beats a database for most developer blogs."
+date: 2026-10-28
+tags: [Git, Markdown, Architecture]
+categories: [Tooling, Engineering]
+published: true
+featured: true
+---
+
+Most content management systems store your writing in a database you don't control. Git offers a different deal: **your content is just files**, with a complete history, and you can take it anywhere.
+
+## What Git gives you for free
+
+- **History** — every revision of every post, with author and timestamp.
+- **Review** — pull requests work just as well for prose as for code.
+- **Portability** — Markdown renders everywhere; there's no export step.
+- **Backups** — every clone is a full backup.
+
+## The trade-offs
+
+Git is not a database. Querying "all posts tagged *rust*" means reading files, so a Git-backed site needs a cache in front of the repository.
+
+```ts
+// Read once, cache, and invalidate on push.
+const posts = await cache(() => loadPostsFromRepo(), { tags: ["content"] });
+```
+
+<Callout type="warning">
+  Never let the website write arbitrary paths in the repository. Build every path from a validated slug.
+</Callout>
+
+## Conflicts are a feature
+
+If someone edits a post directly on GitHub while you're editing it in the dashboard, a Git-native CMS can *detect* that, using the file's blob SHA, instead of silently overwriting their work.

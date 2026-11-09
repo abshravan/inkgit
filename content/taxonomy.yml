@@ -1,0 +1,8 @@
+# Curated categories. Articles reference these by name or slug.
+categories:
+  - name: Artificial Intelligence
+    description: Machine learning, language models, and applied AI.
+  - name: Engineering
+    description: Software design, architecture, and day-to-day craft.
+  - name: Tooling
+    description: Git, editors, build systems, and developer experience.

@@ -1,0 +1,63 @@
+---
+title: "Understanding Large Language Models"
+slug: "understanding-large-language-models"
+description: "An introduction to LLMs: tokens, transformers, and why next-token prediction works so well."
+date: "2026-11-09"
+updatedAt: "2026-11-09"
+author: "Admin"
+tags:
+  - AI
+  - LLM
+categories:
+  - Artificial Intelligence
+published: true
+featured: true
+---
+
+Large language models (LLMs) are neural networks trained to predict the next token in a sequence. That modest objective, applied at enormous scale, produces systems that can summarize, translate, write code, and reason through problems.
+
+## Tokens, not words
+
+Models don't see characters or words — they see **tokens**, sub-word units produced by a tokenizer. A common word might be one token; a rare one might be split into several.
+
+| Text           | Approximate tokens |
+| -------------- | ------------------ |
+| `hello`        | 1                  |
+| `tokenization` | 2–3                |
+| `🦀`           | 1–2                |
+
+<Callout type="tip" title="Rule of thumb">
+  For English prose, one token is roughly three-quarters of a word.
+</Callout>
+
+## The transformer
+
+The transformer architecture relies on **self-attention**: each token computes how much every other token in the context matters to it.
+
+```python title="attention.py" {4-5}
+import numpy as np
+
+def attention(q, k, v):
+    scores = q @ k.T / np.sqrt(k.shape[-1])
+    weights = np.exp(scores) / np.exp(scores).sum(axis=-1, keepdims=True)
+    return weights @ v
+```
+
+### Why scaling helps
+
+Bigger models trained on more data keep improving along smooth, predictable curves. This observation — *scaling laws* — is why model sizes grew so quickly.
+
+## From prediction to assistance
+
+A pretrained model is a document completer. To become a helpful assistant it is further trained with:
+
+1. Supervised fine-tuning on example conversations.
+2. Reinforcement learning from human (or AI) feedback.
+3. Safety training and evaluations.
+
+> A model that only predicts text can still learn a surprising amount about the world that produced that text.
+
+## Further reading
+
+- [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
+- [Git as a CMS](/blog/git-is-the-best-cms)
