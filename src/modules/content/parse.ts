@@ -25,7 +25,7 @@ export type ParsedArticle = Omit<Article, "tags" | "categories"> & {
 
 const MAX_SOURCE_BYTES = 1_000_000;
 
-function splitFrontmatter(file: SourceFile): Result<{ data: unknown; body: string }, ContentIssue[]> {
+export function splitFrontmatter(file: SourceFile): Result<{ data: Record<string, unknown>; body: string }, ContentIssue[]> {
   if (Buffer.byteLength(file.content, "utf8") > MAX_SOURCE_BYTES) {
     return err([{ path: file.path, severity: "error", message: "File exceeds the 1 MB content limit" }]);
   }
@@ -33,7 +33,7 @@ function splitFrontmatter(file: SourceFile): Result<{ data: unknown; body: strin
     // Passing an options object disables gray-matter's global content cache,
     // which would otherwise return shared mutable objects between calls.
     const parsed = matter(file.content, {});
-    return ok({ data: parsed.data, body: parsed.content });
+    return ok({ data: parsed.data as Record<string, unknown>, body: parsed.content });
   } catch (error) {
     const reason = error instanceof Error ? error.message.split("\n")[0] : "unknown error";
     return err([{ path: file.path, severity: "error", message: `Invalid YAML frontmatter: ${reason}` }]);

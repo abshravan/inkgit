@@ -37,3 +37,57 @@ export class GitProviderError extends Error {
     this.name = "GitProviderError";
   }
 }
+
+/** Thrown when a file changed since the caller read it (optimistic concurrency). */
+export class ConflictError extends GitProviderError {
+  constructor(
+    readonly path: string,
+    readonly expectedSha: string | null,
+    readonly actualSha: string | null,
+  ) {
+    super(
+      expectedSha === null
+        ? `${path} already exists`
+        : actualSha === null
+          ? `${path} was deleted since it was loaded`
+          : `${path} was changed since it was loaded`,
+      "conflict",
+    );
+    this.name = "ConflictError";
+  }
+}
+
+/**
+ * A single file change. `expectedSha` is the blob SHA the caller last saw:
+ * `null` means "the file must not exist yet". Every write is conditional —
+ * there is deliberately no way to overwrite a file blindly.
+ */
+export type FileChange =
+  | { op: "upsert"; path: string; content: string; expectedSha: string | null }
+  | { op: "delete"; path: string; expectedSha: string };
+
+export interface CommitAuthor {
+  name: string;
+  email: string;
+}
+
+export interface CommitRequest {
+  message: string;
+  author: CommitAuthor;
+  changes: FileChange[];
+}
+
+export interface CommitResult {
+  /** Commit identifier (a Git commit SHA for real providers). */
+  commitId: string;
+  /** New blob SHA per changed path; `null` for deleted files. */
+  files: Record<string, string | null>;
+}
+
+export interface GitWriter {
+  /** Applies all changes atomically, or none if any precondition fails. */
+  commit(request: CommitRequest): Promise<CommitResult>;
+}
+
+/** A provider that can both read and write content. History is added in Phase 3. */
+export type GitProvider = GitReader & GitWriter;

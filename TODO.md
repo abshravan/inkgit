@@ -32,26 +32,36 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done (functionality verified, n
 - [ ] `pnpm content:check` CLI to validate a content folder/repo (needed by the content-repo CI in Phase 3).
 - [ ] When the network allows `ui.shadcn.com`, re-sync vendored shadcn components with `shadcn add --overwrite`.
 
-## Phase 2 — Content Management
+## Phase 2 — Content Management ✅
 
-- [ ] Auth.js GitHub OAuth + admin allowlist (numeric IDs) + `requireAdmin` guard + `proxy.ts` gate
-- [ ] Admin shell (sidebar) + overview + content-health panel (surface `ContentIndex.issues`)
-- [ ] Article table (search, filter by status/tag/category)
-- [ ] CodeMirror 6 editor + toolbar + shortcuts
-- [ ] Live preview (server pipeline, debounced) + full-page preview route
-- [ ] Word count, reading time (reuse `text-stats.ts`), frontmatter form with validation errors
-- [ ] IndexedDB autosave + recovery
-- [ ] `GitWriter` interface; draft save / publish / unpublish / delete actions (LocalFsProvider)
+- [x] Auth.js GitHub OAuth + admin allowlist (numeric IDs) + per-request `getAdmin`/`requireAdmin*` guards + `proxy.ts` gate
+- [x] Admin shell (sidebar, user menu, theme) + overview with stats and content-health panel
+- [x] Article table (search, status filter incl. "needs attention", category filter)
+- [x] CodeMirror 6 editor + toolbar + shortcuts (commands unit-tested)
+- [x] Live preview (server-rendered, debounced) + full-page preview route (drafts included)
+- [x] Word count, reading time, frontmatter form with field-level validation errors
+- [x] IndexedDB autosave + restore + `beforeunload` guard
+- [x] `GitWriter` + conditional commits; draft save / publish / unpublish / delete (LocalFsProvider)
+- [x] Conflict detection and explicit-overwrite flow
+- [x] Verified: 119 unit tests, 22-check Playwright smoke run
+
+### Phase 2 follow-ups (non-blocking)
+
+- [ ] First public request after publish may be stale (see ARCHITECTURE.md known limitations) — re-check on Vercel.
+- [ ] Taxonomy management UI (edit `taxonomy.yml`) — moved to Phase 3 with other multi-file commits.
+- [ ] Convert the Playwright smoke run into a committed `@playwright/test` suite (Phase 5).
 
 ## Phase 3 — Git Integration
 
 - [ ] `GitHubProvider` (tree read, atomic commit, history, file-at-commit, branch)
 - [x] Path guard + tests (traversal, prefix allowlist) — done in Phase 1
-- [ ] Optimistic concurrency + `ConflictError` + conflict UI
+- [ ] Optimistic concurrency in `GitHubProvider` (`ConflictError` + conflict UI already done in Phase 2)
 - [ ] Publishing workflow end-to-end
 - [ ] Webhook endpoint (HMAC) + `revalidateTag("content")`
 - [ ] History viewer + diff + restore
 - [ ] Rename with `redirectFrom` → redirects
+- [ ] Conflict diff view (side-by-side) instead of raw remote file
+- [ ] Taxonomy management (categories in `taxonomy.yml`)
 - [ ] Integration tests (mocked GitHub)
 
 ## Phase 4 — Advanced Features

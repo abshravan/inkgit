@@ -1,16 +1,30 @@
+import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { gitBlobSha } from "../blob-sha";
 import { assertSafeRepoPath } from "../paths";
-import { GitProviderError, type GitReader, type RepoFile, type RepoFileEntry } from "../types";
+import {
+  ConflictError,
+  GitProviderError,
+  type CommitRequest,
+  type CommitResult,
+  type GitProvider,
+  type RepoFile,
+  type RepoFileEntry,
+} from "../types";
 
 /**
- * Reads content from a directory on disk that mirrors the content repository
- * layout. Used for local development, tests, and Phase 1.
+ * Reads and writes content in a directory on disk that mirrors the content
+ * repository layout. Used for local development and tests.
+ *
+ * It enforces the same optimistic-concurrency contract as the GitHub provider
+ * (blob SHAs), but keeps no history — that comes from Git in Phase 3.
  */
-export class LocalFsProvider implements GitReader {
+export class LocalFsProvider implements GitProvider {
   readonly id = "local";
   private readonly root: string;
+  /** Serializes commits within this process so check-then-write is atomic. */
+  private queue: Promise<unknown> = Promise.resolve();
 
   constructor(root: string) {
     this.root = path.resolve(root);
@@ -55,24 +69,86 @@ export class LocalFsProvider implements GitReader {
     }
   }
 
+  commit(request: CommitRequest): Promise<CommitResult> {
+    const run = this.queue.then(() => this.applyCommit(request));
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async applyCommit(request: CommitRequest): Promise<CommitResult> {
+    if (request.changes.length === 0) {
+      throw new GitProviderError("A commit needs at least one change", "invalid_path");
+    }
+    const paths = request.changes.map((change) => assertSafeRepoPath(change.path));
+    if (new Set(paths).size !== paths.length) {
+      throw new GitProviderError("A commit cannot change the same path twice", "invalid_path");
+    }
+
+    // 1. Verify every precondition before touching the disk.
+    for (const change of request.changes) {
+      const current = await this.readFile(change.path);
+      const actualSha = current?.sha ?? null;
+      if (actualSha !== change.expectedSha) {
+        throw new ConflictError(change.path, change.expectedSha, actualSha);
+      }
+    }
+
+    // 2. Apply. Each file is written to a temp file and renamed into place, so
+    //    readers never observe a half-written file.
+    const files: CommitResult["files"] = {};
+    for (const change of request.changes) {
+      const target = await this.resolveInsideRoot(assertSafeRepoPath(change.path));
+      try {
+        if (change.op === "delete") {
+          await fs.rm(target);
+          files[change.path] = null;
+        } else {
+          await fs.mkdir(path.dirname(target), { recursive: true });
+          const temp = `${target}.${randomUUID()}.tmp`;
+          await fs.writeFile(temp, change.content, "utf8");
+          await fs.rename(temp, target);
+          files[change.path] = gitBlobSha(change.content);
+        }
+      } catch (error) {
+        throw new GitProviderError(`Unable to write ${change.path}`, "io", { cause: error });
+      }
+    }
+
+    const commitId = createHash("sha1")
+      .update(`${request.message}\0${Date.now()}\0${JSON.stringify(files)}`)
+      .digest("hex");
+    return { commitId, files };
+  }
+
   /**
    * Resolves symlinks and verifies the final location is still inside the
-   * root, so a symlink in the content folder can't expose arbitrary files.
+   * root, so a symlink in the content folder can't expose or overwrite
+   * arbitrary files. For paths that don't exist yet, the nearest existing
+   * ancestor is checked instead.
    */
   private async resolveInsideRoot(safePath: string): Promise<string> {
     const candidate = path.resolve(this.root, safePath);
-    let real: string;
-    try {
-      real = await fs.realpath(candidate);
-    } catch (error) {
-      if (isNotFound(error)) return candidate;
-      throw new GitProviderError(`Unable to resolve ${safePath}`, "io", { cause: error });
-    }
     const realRoot = await fs.realpath(this.root).catch(() => this.root);
-    if (real !== realRoot && !real.startsWith(realRoot + path.sep)) {
-      throw new GitProviderError(`Path escapes content root: ${safePath}`, "invalid_path");
+    let existing = candidate;
+    let suffix = "";
+    for (;;) {
+      try {
+        const real = await fs.realpath(existing);
+        if (real !== realRoot && !real.startsWith(realRoot + path.sep)) {
+          throw new GitProviderError(`Path escapes content root: ${safePath}`, "invalid_path");
+        }
+        return suffix ? path.join(real, suffix) : real;
+      } catch (error) {
+        if (error instanceof GitProviderError) throw error;
+        if (!isNotFound(error)) throw new GitProviderError(`Unable to resolve ${safePath}`, "io", { cause: error });
+        // A missing root means "no content yet", not an escape attempt.
+        if (existing === this.root) return candidate;
+        const parent = path.dirname(existing);
+        if (parent === existing) return candidate;
+        suffix = suffix ? path.join(path.basename(existing), suffix) : path.basename(existing);
+        existing = parent;
+      }
     }
-    return real;
   }
 }
 

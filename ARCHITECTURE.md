@@ -2,7 +2,7 @@
 
 > "Your content belongs to you. Your repository is your CMS. Your website is your presentation layer."
 
-Status: **Approved — Phase 1 implemented** · Last updated: 2026-11-09
+Status: **Approved — Phases 1–2 implemented** · Last updated: 2026-11-09
 
 This document is the source of truth for InkGit's architecture. It is updated whenever an architectural decision changes. Decisions that rest on assumptions are marked **[ASSUMPTION]**; open questions are listed in §12.
 
@@ -410,7 +410,26 @@ Things that differ from, or refine, the original plan:
 - **shadcn/ui is vendored.** The registry host (`ui.shadcn.com`) was blocked in the build environment, so the needed primitives (button, badge, separator, skeleton, dropdown-menu) were written from shadcn's source. `components.json` is present so `shadcn add` works normally elsewhere.
 - **Fonts** are self-hosted from the `geist` package (no build-time network). Only the sans font is preloaded.
 
+## 14. Implementation Notes (Phase 2)
+
+- **Write path.** `GitWriter.commit()` takes a list of `FileChange`s, each with a required `expectedSha` (`null` = must not exist). There is no unconditional write. `LocalFsProvider` checks every precondition before touching disk, writes via temp file + rename, serializes commits in-process, and refuses paths whose nearest existing ancestor resolves (via symlinks) outside the content root.
+- **Editorial service** (`modules/publishing/editorial-service.ts`) owns the editing rules:
+  - Intents are `save` (keep status; new articles start as drafts), `publish` and `unpublish`. `published` is never a form field.
+  - Frontmatter must be schema-valid for any save. MDX must also _compile_ to publish; broken MDX can still be saved as a draft.
+  - On publish, `updatedAt` is set to today when today is after `date`.
+  - Unknown frontmatter keys (and `canonicalUrl`, `redirectFrom`, `slug`) are preserved; files are written in a canonical key order (`modules/content/serialize.ts`) so diffs stay small.
+  - Invalid files can be opened and repaired in the editor and are listed as "Needs fixing".
+  - Conflicts return the remote version; overwriting requires an explicit `overwrite.remoteSha`, which is itself conditional and is noted in the commit message.
+- **Server actions** (`app/admin/actions.tsx`) are the only write entry points: admin check → Zod validation → service → `updateTag("content")`. The live preview action returns a rendered React tree (RSC), so preview uses the exact production pipeline and components with no client-side MDX evaluation.
+- **Auth.** Auth.js v5, GitHub provider, JWT cookie sessions (7 days). Non-allowlisted accounts are rejected in the `signIn` callback, and the allowlist is re-checked on every page/action (`modules/auth/guards.ts`), so removing an ID revokes access immediately. `proxy.ts` only redirects requests without a session cookie (UX); it is not the security boundary. The GitHub OAuth token is not stored.
+- **Cache Components and auth.** `getAdmin()` calls `connection()` first. Without it, a build without auth env vars short-circuits before touching request data and Next.js prerenders the "unauthorized" redirect into a static page (found and fixed during e2e testing). Admin pages keep static chrome and stream session-dependent content behind `<Suspense>`; `usePathname()` consumers are wrapped in Suspense with a non-highlighted fallback.
+- **Editor.** CodeMirror 6 (raw Markdown) with formatting commands written as pure `EditorState → TransactionSpec` functions (unit-tested), a frontmatter form, debounced server-rendered preview, word count/reading time from the same `text-stats` module as the public site, IndexedDB autosave with restore, `beforeunload` guard, and keyboard shortcuts. On desktop the editor fills the viewport and panes scroll independently.
+- **Verification.** Besides unit tests, a Playwright smoke run (session cookie minted with Auth.js's own `encode`, no test backdoor in the app) exercised 22 checks: auth rejection for missing, foreign and tampered sessions; search/filter; live preview; publish; conflict + explicit overwrite; render-error blocking; autosave restore; validation; create → draft → publish; draft invisibility; full-page preview; delete. Converting it into a committed `@playwright/test` suite is a Phase 5 task.
+
 ### Known limitations
 
 - **Soft 404 for unlisted params.** With Partial Prefetching, a URL not returned by `generateStaticParams` (e.g. `/blog/unknown`) streams the 404 UI with `<meta name="robots" content="noindex">` but HTTP **200** — documented Next.js behaviour once streaming starts. Drafts are never rendered. A `proxy.ts` slug check can return a hard 404 later if needed.
+- **First public request after a publish can be stale.** After `updateTag("content")`, the first request to an already-prerendered public page returned the previous version, and the next request (within ~1 s) was fresh, measured consistently with `next start`. Adding `revalidatePath("/", "layout")` made this worse, so it was not kept. To re-check on Vercel in Phase 3 alongside the webhook.
+- **Local writes only.** Until the GitHub provider lands (Phase 3), the admin writes to the local content folder; serverless hosts have read-only filesystems, so publishing is done from `pnpm dev` locally.
+- **Slugs can't be renamed** after the first save yet (rename with `redirectFrom` is Phase 3). Conflict view shows the remote file, not a diff (diff view is Phase 3).
 - **Performance.** Lighthouse (simulated mobile, local `next start`): home 94–96, article 93–94, accessibility/best-practices/SEO 100. Article LCP is dominated by render delay under throttling; to be re-measured on Vercel (CDN + compression) in Phase 5.

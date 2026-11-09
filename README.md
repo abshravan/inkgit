@@ -7,7 +7,9 @@ A Git-native blogging platform. **Your content belongs to you. Your repository i
 
 ## Status
 
-Phase 1 (foundation and public site over local content) is complete. The admin dashboard (Phase 2) and GitHub integration (Phase 3) are next.
+- ✅ Phase 1 — public site over local content
+- ✅ Phase 2 — admin dashboard, GitHub sign-in, Markdown editor, drafts and publishing (against the local `content/` folder)
+- ⏭️ Phase 3 — GitHub as the content store (commits, history, restore, webhooks)
 
 ## Getting started
 
@@ -26,6 +28,18 @@ pnpm dev
 ```
 
 Open http://localhost:3000.
+
+## Admin dashboard
+
+The admin lives at `/admin` and is restricted to the GitHub accounts listed in `ADMIN_GITHUB_IDS`.
+
+1. Create a GitHub OAuth App at https://github.com/settings/developers with the callback URL `http://localhost:3000/api/auth/callback/github`.
+2. Fill in `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` and `AUTH_SECRET` (`openssl rand -base64 32`) in `.env.local`.
+3. Add your numeric GitHub user ID to `ADMIN_GITHUB_IDS` (the `id` field of `https://api.github.com/users/<your-login>`). IDs are used instead of usernames because usernames can change hands.
+
+Until Phase 3, the editor writes to the local `content/` folder, so publish from `pnpm dev` on your machine and commit the files yourself. Serverless hosts such as Vercel have a read-only filesystem.
+
+Editor shortcuts: <kbd>Ctrl/⌘ S</kbd> save · <kbd>Ctrl/⌘ B</kbd> bold · <kbd>Ctrl/⌘ I</kbd> italic · <kbd>Ctrl/⌘ K</kbd> link · <kbd>Ctrl/⌘ E</kbd> inline code. Unsaved edits are backed up in the browser (IndexedDB) and offered for restore.
 
 ## Scripts
 
