@@ -25,7 +25,7 @@ jobs:
       GITHUB_WEBHOOK_SECRET: ci-canary-webhook-secret-9999
       MEDIA_S3_SECRET_ACCESS_KEY: ci-canary-s3-secret-7777
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -47,7 +47,7 @@ jobs:
     timeout-minutes: 30
     needs: check
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
