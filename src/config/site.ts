@@ -6,7 +6,7 @@ export const siteConfig = {
   name: "InkGit",
   tagline: "Notes from a Git-native blog",
   description: "A developer-focused blog where every article lives in a Git repository. Your repository is your CMS.",
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  url: process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
   locale: "en",
   author: {
     name: "Admin",

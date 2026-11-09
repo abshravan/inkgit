@@ -26,7 +26,7 @@ let redirectCache: { map: Record<string, string>; fetchedAt: number } | null = n
  */
 function trustedOrigin(request: NextRequest): string | null {
   // SITE_URL is read at runtime; NEXT_PUBLIC_SITE_URL is inlined at build time.
-  const configured = process.env.SITE_URL ?? process.env.NEXT_PUBLIC_SITE_URL;
+  const configured = process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL;
   if (configured) return new URL(configured).origin;
   return process.env.NODE_ENV === "development" ? request.nextUrl.origin : null;
 }

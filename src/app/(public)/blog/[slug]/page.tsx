@@ -7,6 +7,14 @@ import { serializeJsonLd } from "@/modules/seo/json-ld";
 import { withPlaceholder } from "@/lib/static-params";
 import { getPublishedArticle, listPublishedArticles, listRelatedArticles } from "@/modules/content/queries";
 
+/**
+ * Every known slug is prerendered (generateStaticParams). An unknown slug
+ * resolves in one blocking request instead of streaming a shell, so the page
+ * can decide (404 or content) before anything is sent. That's a deliberate
+ * blocking route, so opt out of instant-navigation validation.
+ */
+export const instant = false;
+
 export async function generateStaticParams() {
   const articles = await listPublishedArticles();
   return withPlaceholder(

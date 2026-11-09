@@ -7,6 +7,14 @@ import { PageHeader } from "@/components/site/page-header";
 import { withPlaceholder } from "@/lib/static-params";
 import { getCategoryWithArticles, listCategories } from "@/modules/content/queries";
 
+/**
+ * Every known slug is prerendered (generateStaticParams). An unknown slug
+ * resolves in one blocking request instead of streaming a shell, so the page
+ * can decide (404 or content) before anything is sent. That's a deliberate
+ * blocking route, so opt out of instant-navigation validation.
+ */
+export const instant = false;
+
 export async function generateStaticParams() {
   return withPlaceholder(
     "category",

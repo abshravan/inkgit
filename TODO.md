@@ -11,7 +11,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done (functionality verified, n
 ## Phase 1 — Project Foundation ✅
 
 - [x] Initialize Next.js 16 (App Router, Cache Components), TypeScript strict (+ `noUncheckedIndexedAccess`), pnpm
-- [x] Tailwind CSS v4 + shadcn/ui (vendored, see note) + Lucide + next-themes
+- [x] Tailwind CSS v4 + shadcn/ui (vendored, see note) + Lucide + theme switching (own ~60-line implementation; next-themes removed after a React 19 warning)
 - [x] ESLint, Prettier, Vitest, CI workflow (typecheck, lint, format, test, build)
 - [x] Zod-validated env (`src/lib/env.ts`) + `.env.example`
 - [x] Content schema (Zod) + parser (gray-matter) + slug utils — with unit tests

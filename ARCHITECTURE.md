@@ -381,7 +381,7 @@ _Acceptance:_ CI green on lint/typecheck/unit/integration/e2e; documented one-co
 
 ## 11. Library Choices (minimal set)
 
-`next`, `react`, `typescript`, `tailwindcss`, shadcn/ui (`radix-ui`, `class-variance-authority`, `tailwind-merge`), `lucide-react`, `next-themes`, `zod`, `gray-matter`, `@mdx-js/mdx` + `unified`/`remark-gfm`/`rehype-slug`/`rehype-autolink-headings`/`rehype-sanitize`, `shiki` (via `rehype-pretty-code`), `reading-time`, `@codemirror/*`, `octokit`, `next-auth` (Auth.js v5), `minisearch`, `@aws-sdk/client-s3` (or the chosen storage SDK), `vitest`, `@playwright/test`.
+`next`, `react`, `typescript`, `tailwindcss`, shadcn/ui (`radix-ui`, `class-variance-authority`, `tailwind-merge`), `lucide-react`, `zod`, `gray-matter`, `@mdx-js/mdx` + `unified`/`remark-gfm`/`rehype-slug`/`rehype-autolink-headings`/`rehype-sanitize`, `shiki` (via `rehype-pretty-code`), `reading-time`, `@codemirror/*`, `octokit`, `next-auth` (Auth.js v5), `minisearch`, `@aws-sdk/client-s3` (or the chosen storage SDK), `vitest`, `@playwright/test`.
 
 ---
 
@@ -470,6 +470,12 @@ Things that differ from, or refine, the original plan:
   - access control, editor flows, conflicts, autosave, scheduling, media;
   - every GitHub flow.
 - **CI**: an audit/type/lint/format/unit/content/build job with canary secrets and `check:secrets`, plus a Playwright e2e job. Dependabot for npm and Actions.
+
+## 18. Fixes after first local setup
+
+- **`.env.example` didn't boot.** Blank optional entries (`CONTENT_REPO=` and similar) were validated as provided-but-invalid. `parseServerEnv()` now treats blank values as unset. A unit test parses the real `.env.example`. Direct `process.env` reads use `||` so blanks fall back; with `??`, a blank `SITE_URL` would have disabled 308 redirects.
+- **Theme script warning (React 19).** `next-themes` renders an inline `<script>` from a client component, which React 19 warns about. It's replaced by `lib/theme.ts`: a head script that applies the stored preference before paint, a toggle that writes the same `localStorage` key, and live system-theme following. The script is rendered through `InlineScript`, a client component that is `text/javascript` on the server and inert `text/plain` in the browser, because a not-found boundary re-renders the root layout on the client. This follows the Next.js "Preventing flash before hydration" guide.
+- **Dev-only instant-navigation errors** on `/blog/[slug]`, `/tags/[tag]` and `/categories/[category]`: these routes deliberately await `params` outside Suspense (fully prerendered known slugs, one blocking request for unknown ones), now declared with `export const instant = false`.
 
 ### Known limitations
 

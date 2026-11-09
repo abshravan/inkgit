@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
         headers: buildSecurityHeaders({
           isDev: process.env.NODE_ENV === "development",
           analyticsSrc: process.env.NEXT_PUBLIC_ANALYTICS_DOMAIN
-            ? (process.env.NEXT_PUBLIC_ANALYTICS_SRC ?? "https://plausible.io/js/script.js")
+            ? process.env.NEXT_PUBLIC_ANALYTICS_SRC || "https://plausible.io/js/script.js"
             : undefined,
         }),
       },

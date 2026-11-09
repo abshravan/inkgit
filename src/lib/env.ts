@@ -87,19 +87,22 @@ export type ServerEnv = Omit<z.infer<typeof serverEnvSchema>, "ADMIN_GITHUB_IDS"
 
 let cached: ServerEnv | undefined;
 
-export function getServerEnv(): ServerEnv {
-  if (cached) return cached;
-  const parsed = serverEnvSchema.safeParse(process.env);
+/**
+ * Validates an environment. Blank values (`KEY=` lines, as in .env.example)
+ * count as unset, so optional settings left empty fall back to their defaults
+ * instead of failing validation.
+ */
+export function parseServerEnv(source: Record<string, string | undefined>): ServerEnv {
+  const normalized = Object.fromEntries(
+    Object.entries(source).map(([key, value]) => [key, value === undefined || value.trim() === "" ? undefined : value]),
+  );
+  const parsed = serverEnvSchema.safeParse(normalized);
   if (!parsed.success) {
     throw new Error(`Invalid server environment: ${z.prettifyError(parsed.error)}`);
   }
   const { ADMIN_GITHUB_IDS, ...rest } = parsed.data;
   const adminGithubIds = parseAdminIds(ADMIN_GITHUB_IDS);
-  if (process.env.VERCEL && (rest.CONTENT_SOURCE === "local" || rest.MEDIA_STORAGE === "local")) {
-    // Serverless filesystems are read-only and ephemeral: local writes/uploads won't persist.
-    console.warn("[inkgit:env] On Vercel use CONTENT_SOURCE=github and MEDIA_STORAGE=s3 (see docs/DEPLOYMENT.md).");
-  }
-  cached = {
+  return {
     ...rest,
     contentRoot: path.resolve(/* turbopackIgnore: true */ process.cwd(), rest.CONTENT_DIR),
     mediaRoot: path.resolve(/* turbopackIgnore: true */ process.cwd(), rest.MEDIA_DIR),
@@ -108,5 +111,14 @@ export function getServerEnv(): ServerEnv {
       rest.AUTH_SECRET && rest.AUTH_GITHUB_ID && rest.AUTH_GITHUB_SECRET && adminGithubIds.size > 0,
     ),
   };
+}
+
+export function getServerEnv(): ServerEnv {
+  if (cached) return cached;
+  cached = parseServerEnv(process.env);
+  if (process.env.VERCEL && (cached.CONTENT_SOURCE === "local" || cached.MEDIA_STORAGE === "local")) {
+    // Serverless filesystems are read-only and ephemeral: local writes/uploads won't persist.
+    console.warn("[inkgit:env] On Vercel use CONTENT_SOURCE=github and MEDIA_STORAGE=s3 (see docs/DEPLOYMENT.md).");
+  }
   return cached;
 }

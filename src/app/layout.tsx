@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { ThemeProvider } from "@/components/site/theme-provider";
+import { InlineScript } from "@/components/site/inline-script";
 import { siteConfig } from "@/config/site";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { fontMono, fontSans } from "./fonts";
 import "./globals.css";
 
@@ -23,11 +24,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    // next-themes sets the `class` attribute before hydration.
+    // The inline script sets the `dark` class before first paint, so <html> differs from the server render.
     <html lang={siteConfig.locale} suppressHydrationWarning className={`${fontSans.variable} ${fontMono.variable}`}>
-      <body className="min-h-dvh font-sans antialiased">
-        <ThemeProvider>{children}</ThemeProvider>
-      </body>
+      <head>
+        {/* Runs during HTML parsing, before first paint: applies the saved theme. */}
+        <InlineScript html={THEME_INIT_SCRIPT} />
+      </head>
+      <body className="min-h-dvh font-sans antialiased">{children}</body>
     </html>
   );
 }
