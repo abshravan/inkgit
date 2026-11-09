@@ -2,7 +2,7 @@
 
 > "Your content belongs to you. Your repository is your CMS. Your website is your presentation layer."
 
-Status: **Approved — Phases 1–2 implemented** · Last updated: 2026-11-09
+Status: **Approved — Phases 1–3 implemented** · Last updated: 2026-11-09
 
 This document is the source of truth for InkGit's architecture. It is updated whenever an architectural decision changes. Decisions that rest on assumptions are marked **[ASSUMPTION]**; open questions are listed in §12.
 
@@ -426,10 +426,28 @@ Things that differ from, or refine, the original plan:
 - **Editor.** CodeMirror 6 (raw Markdown) with formatting commands written as pure `EditorState → TransactionSpec` functions (unit-tested), a frontmatter form, debounced server-rendered preview, word count/reading time from the same `text-stats` module as the public site, IndexedDB autosave with restore, `beforeunload` guard, and keyboard shortcuts. On desktop the editor fills the viewport and panes scroll independently.
 - **Verification.** Besides unit tests, a Playwright smoke run (session cookie minted with Auth.js's own `encode`, no test backdoor in the app) exercised 22 checks: auth rejection for missing, foreign and tampered sessions; search/filter; live preview; publish; conflict + explicit overwrite; render-error blocking; autosave restore; validation; create → draft → publish; draft invisibility; full-page preview; delete. Converting it into a committed `@playwright/test` suite is a Phase 5 task.
 
+## 15. Implementation Notes (Phase 3)
+
+- **`GitHubProvider`** (`modules/git/github/`) implements `GitReader`, `GitWriter` and the optional `GitHistory` capability over the REST Git Data API with plain `fetch` (no Octokit; the client is ~150 lines and injectable for tests).
+  - **Reads:** resolve the branch head (conditional GET, deduplicated across concurrent reads), then one recursive tree call per head commit (cached by commit SHA, immutable), then blobs cached by SHA. With `'use cache'` in front, normal page views make no GitHub calls.
+  - **Writes:** `POST git/trees` (base = head tree; inline content; `sha: null` deletes) → `POST git/commits` (author = signed-in admin) → `PATCH git/refs/heads/<branch>` with `force: false`. A 422 (branch moved) triggers a retry from a fresh snapshot, re-checking every file's expected SHA, so concurrent unrelated pushes are merged naturally and concurrent edits to the same file become `ConflictError` (max 3 attempts).
+  - **History:** `GET commits?path=` (paged); old versions via `contents/<path>?ref=<sha>` (raw media type).
+  - **Branches:** `createBranch()` exists for scheduled publishing / PR mode (Phase 4); the MVP commits to the configured branch.
+  - **Errors:** 401/404/rate limit (403 with `x-ratelimit-remaining: 0`, 429) map to typed `GitProviderError`s. Tokens are never logged or echoed.
+  - **No head TTL by default.** A cached render built from an outdated head stays cached until the next invalidation. Found in e2e: a webhook-triggered render reused a 2-second-old head and re-cached stale content.
+- **Same contract, two providers.** The editorial test suite runs unchanged against `LocalFsProvider` and `GitHubProvider` (backed by `tests/helpers/fake-github.ts`, an in-memory GitHub with real Git semantics: content-addressed objects, fast-forward-only refs, ETags/304, rate-limit responses, hooks to simulate concurrent pushes).
+- **Restore** commits the old content as a new version (`content(restore): <slug> to <sha7>`), conditional on the SHA the history page showed. **Rename** is one commit (delete old + create new), appending the old slug to `redirectFrom`.
+- **Redirects** are served by `proxy.ts` (real HTTP 308) from a cached `/api/content/redirects` map, memoized in the proxy for 5 s. They can't be issued during page rendering: pages stream, and a redirect thrown while rendering was cached by Next.js as a 308 **without** a `Location` header (found in e2e).
+- **Taxonomy** (`TaxonomyService`): add/edit/delete categories (in `taxonomy.yml`) and rename/merge/delete tags. Renames and deletions rewrite `taxonomy.yml` and every affected article in **one** atomic commit; any concurrent change aborts the whole operation. Custom category slugs are preserved; YAML comments in `taxonomy.yml` are not.
+- **Webhook** `/api/webhooks/github`: HMAC-SHA256 verification with constant-time compare, 5 MB body limit, `ping` support, and only pushes to the configured repo/branch touching the content folder revalidate (`revalidateTag("content", { expire: 0 })`).
+- **Diffs**: `lib/diff.ts` (jsdiff line diff with `git`-style context collapsing) rendered by `DiffView`, used for history (current → selected version) and conflicts (repository → yours).
+- **Verification:** 171 unit tests; a Playwright run against the production build using the fake GitHub over HTTP (23 checks: commit count/message/author, history, diff, restore, conflict diff, webhook signature/ping/relevance/freshness, rename + 308, taxonomy commits), plus the Phase 2 run against the local source (22 checks), all passing.
+
 ### Known limitations
 
 - **Soft 404 for unlisted params.** With Partial Prefetching, a URL not returned by `generateStaticParams` (e.g. `/blog/unknown`) streams the 404 UI with `<meta name="robots" content="noindex">` but HTTP **200** — documented Next.js behaviour once streaming starts. Drafts are never rendered. A `proxy.ts` slug check can return a hard 404 later if needed.
-- **First public request after a publish can be stale.** After `updateTag("content")`, the first request to an already-prerendered public page returned the previous version, and the next request (within ~1 s) was fresh, measured consistently with `next start`. Adding `revalidatePath("/", "layout")` made this worse, so it was not kept. To re-check on Vercel in Phase 3 alongside the webhook.
-- **Local writes only.** Until the GitHub provider lands (Phase 3), the admin writes to the local content folder; serverless hosts have read-only filesystems, so publishing is done from `pnpm dev` locally.
-- **Slugs can't be renamed** after the first save yet (rename with `redirectFrom` is Phase 3). Conflict view shows the remote file, not a diff (diff view is Phase 3).
+- **Not yet verified against real GitHub.** All GitHub behaviour is tested against a fake that models the API; a live run against a real repository is pending a repository + token.
+- **HEAD requests to renamed URLs** may return the cached page (200) instead of the 308; `GET` (what browsers and crawlers use) is correct.
+- **First public request after a publish can be stale.** After `updateTag("content")`, the first request to an already-prerendered public page returned the previous version, and the next request (within ~1 s) was fresh, measured consistently with `next start`. Adding `revalidatePath("/", "layout")` made this worse, so it was not kept. The webhook's `revalidateTag(..., { expire: 0 })` shows the same one-stale-response pattern. To re-check on Vercel (Phase 5).
+- **Local source is for development.** Serverless hosts have read-only filesystems; production uses `CONTENT_SOURCE=github`.
 - **Performance.** Lighthouse (simulated mobile, local `next start`): home 94–96, article 93–94, accessibility/best-practices/SEO 100. Article LCP is dominated by render delay under throttling; to be re-measured on Vercel (CDN + compression) in Phase 5.

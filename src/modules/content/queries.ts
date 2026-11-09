@@ -42,6 +42,15 @@ export async function getPublishedArticle(slug: string): Promise<Article | null>
   return (await getPublishedArticles()).find((article) => article.slug === slug) ?? null;
 }
 
+/** Old slug → current slug for every published article with `redirectFrom`. */
+export async function getRedirectMap(): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  for (const article of await getPublishedArticles()) {
+    for (const from of article.redirectFrom) map[from] ??= article.slug;
+  }
+  return map;
+}
+
 export async function listFeaturedArticles(limit: number): Promise<Article[]> {
   return selectFeatured(await getPublishedArticles(), limit);
 }

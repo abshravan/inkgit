@@ -89,5 +89,39 @@ export interface GitWriter {
   commit(request: CommitRequest): Promise<CommitResult>;
 }
 
-/** A provider that can both read and write content. History is added in Phase 3. */
+/** A provider that can both read and write content. */
 export type GitProvider = GitReader & GitWriter;
+
+export interface CommitSummary {
+  sha: string;
+  /** First line of the commit message. */
+  subject: string;
+  authorName: string;
+  authorEmail: string | null;
+  /** ISO 8601 timestamp. */
+  date: string;
+  /** Link to the commit on the Git host, when available. */
+  url: string | null;
+}
+
+export interface HistoryPage {
+  commits: CommitSummary[];
+  /** Opaque cursor for the next page, or null when there are no more. */
+  nextCursor: string | null;
+}
+
+/**
+ * Optional capability: providers backed by real Git history implement this.
+ * The local filesystem provider does not, and the UI degrades gracefully.
+ */
+export interface GitHistory {
+  getHistory(query: { path?: string; limit: number; cursor?: string | null }): Promise<HistoryPage>;
+  /** Reads a file as it was at `commitSha`. Missing at that commit → `null`. */
+  readFileAtCommit(path: string, commitSha: string): Promise<RepoFile | null>;
+  /** Creates `branch` pointing at `fromSha` (or the current head). */
+  createBranch(branch: string, fromSha?: string): Promise<void>;
+}
+
+export function supportsHistory(provider: GitProvider): provider is GitProvider & GitHistory {
+  return "getHistory" in provider && typeof (provider as Partial<GitHistory>).getHistory === "function";
+}

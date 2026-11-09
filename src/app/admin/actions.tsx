@@ -5,10 +5,11 @@ import { z } from "zod";
 import { MdxContent } from "@/components/mdx/mdx-content";
 import { commitAuthorFor, requireAdminAction, UnauthorizedError } from "@/modules/auth/guards";
 import { signIn, signOut } from "@/modules/auth/auth";
-import { getEditorialService } from "@/modules/content/container";
+import { getEditorialService, getTaxonomyService } from "@/modules/content/container";
 import { articleFormSchema } from "@/modules/content/editable";
 import { CONTENT_CACHE_TAG } from "@/modules/content/queries";
-import type { DeleteArticleResult, SaveArticleResult } from "@/modules/publishing/types";
+import type { TaxonomyResult } from "@/modules/publishing/taxonomy-service";
+import type { DeleteArticleResult, RenameResult, RestoreResult, SaveArticleResult } from "@/modules/publishing/types";
 import { compileContent, ContentRenderError, type TocEntry } from "@/modules/rendering/pipeline";
 import { countWords } from "@/modules/rendering/text-stats";
 
@@ -74,6 +75,60 @@ export async function deleteArticleAction(input: unknown): Promise<DeleteArticle
   if (!parsed.success) return { status: "error", message: "Invalid request" };
   const result = await getEditorialService().delete(parsed.data.slug, parsed.data.baseSha, commitAuthorFor(admin));
   if (result.status === "deleted") refreshPublicSite();
+  return result;
+}
+
+const restoreInputSchema = z.object({ slug: z.string().max(100), commitSha: blobSha, baseSha: blobSha.nullable() });
+
+export async function restoreArticleAction(input: unknown): Promise<RestoreResult> {
+  const admin = await requireAdminAction().catch(() => null);
+  if (!admin) return unauthorized();
+  const parsed = restoreInputSchema.safeParse(input);
+  if (!parsed.success) return { status: "error", message: "Invalid request" };
+  const { slug, commitSha, baseSha } = parsed.data;
+  const result = await getEditorialService().restore(slug, commitSha, baseSha, commitAuthorFor(admin));
+  if (result.status === "restored") refreshPublicSite();
+  return result;
+}
+
+const renameInputSchema = z.object({ slug: z.string().max(100), newSlug: z.string().max(100), baseSha: blobSha });
+
+export async function renameArticleAction(input: unknown): Promise<RenameResult> {
+  const admin = await requireAdminAction().catch(() => null);
+  if (!admin) return unauthorized();
+  const parsed = renameInputSchema.safeParse(input);
+  if (!parsed.success) return { status: "invalid", message: "Invalid request" };
+  const { slug, newSlug, baseSha } = parsed.data;
+  const result = await getEditorialService().rename(slug, newSlug.trim(), baseSha, commitAuthorFor(admin));
+  if (result.status === "renamed") refreshPublicSite();
+  return result;
+}
+
+const termName = z.string().trim().min(1).max(60);
+const termSlug = z
+  .string()
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  .max(100);
+const taxonomyInputSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("add-category"), name: termName, description: z.string().trim().max(300) }),
+  z.object({
+    type: z.literal("update-category"),
+    slug: termSlug,
+    name: termName,
+    description: z.string().trim().max(300),
+  }),
+  z.object({ type: z.literal("delete-category"), slug: termSlug }),
+  z.object({ type: z.literal("rename-tag"), slug: termSlug, name: termName }),
+  z.object({ type: z.literal("delete-tag"), slug: termSlug }),
+]);
+
+export async function taxonomyAction(input: unknown): Promise<TaxonomyResult> {
+  const admin = await requireAdminAction().catch(() => null);
+  if (!admin) return unauthorized();
+  const parsed = taxonomyInputSchema.safeParse(input);
+  if (!parsed.success) return { status: "invalid", message: parsed.error.issues[0]?.message ?? "Invalid request" };
+  const result = await getTaxonomyService().apply(parsed.data, commitAuthorFor(admin));
+  if (result.status === "saved" && result.filesChanged > 0) refreshPublicSite();
   return result;
 }
 

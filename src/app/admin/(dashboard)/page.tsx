@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDate } from "@/lib/format";
 import { requireAdminPage } from "@/modules/auth/guards";
-import { getEditorialService } from "@/modules/content/container";
+import { describeContentSource, getEditorialService } from "@/modules/content/container";
 
 export const metadata: Metadata = { title: "Overview" };
 
@@ -36,6 +36,7 @@ export default function OverviewPage() {
 async function OverviewContent() {
   await requireAdminPage();
   const { articles, globalIssues } = await getEditorialService().getOverview();
+  const source = describeContentSource();
   const published = articles.filter((article) => article.status === "published");
   const drafts = articles.filter((article) => article.status === "draft");
   const needsAttention = articles.filter((article) => article.issues.length > 0);
@@ -57,6 +58,21 @@ async function OverviewContent() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
+      <p className="text-sm text-muted-foreground">
+        Content source:{" "}
+        {source.url ? (
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-foreground hover:underline"
+          >
+            {source.label}
+          </a>
+        ) : (
+          <span className="font-mono text-foreground">{source.label}</span>
+        )}
+      </p>
       <div className="grid gap-4 sm:grid-cols-3">
         {stats.map(({ label, value, Icon, href }) => (
           <Link

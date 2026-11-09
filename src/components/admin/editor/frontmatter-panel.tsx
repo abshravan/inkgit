@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -44,7 +45,10 @@ export function FrontmatterPanel({
   onChange,
   slug,
   onSlugChange,
-  slugEditable,
+  mode,
+  savedSlug,
+  onRename,
+  renameBlockedReason,
   categories,
   errors,
 }: {
@@ -52,7 +56,12 @@ export function FrontmatterPanel({
   onChange: (values: ArticleFormValues) => void;
   slug: string;
   onSlugChange: (slug: string) => void;
-  slugEditable: boolean;
+  mode: "create" | "edit";
+  /** Slug currently stored in the repository (edit mode). */
+  savedSlug: string | null;
+  onRename?: () => void;
+  /** Why renaming is unavailable right now (e.g. unsaved changes). */
+  renameBlockedReason?: string | null;
   categories: Category[];
   errors: FieldErrors;
 }) {
@@ -85,17 +94,38 @@ export function FrontmatterPanel({
       <Field
         id={`${id}-slug`}
         label="Slug"
-        hint={slugEditable ? "Used in the URL. Can't be changed after the first save yet." : `/blog/${slug}`}
+        hint={
+          mode === "create"
+            ? "Used in the URL: /blog/<slug>."
+            : "Renaming moves the file and keeps the old URL redirecting here."
+        }
         error={errors.slug}
       >
-        <Input
-          id={`${id}-slug`}
-          value={slug}
-          readOnly={!slugEditable}
-          onChange={(e) => onSlugChange(e.target.value)}
-          className={cn("font-mono text-xs", !slugEditable && "bg-muted text-muted-foreground")}
-          {...invalid("slug")}
-        />
+        <div className="flex gap-2">
+          <Input
+            id={`${id}-slug`}
+            value={slug}
+            onChange={(e) => onSlugChange(e.target.value)}
+            className={cn("font-mono text-xs")}
+            {...invalid("slug")}
+          />
+          {mode === "edit" && savedSlug !== null && slug !== savedSlug && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-9"
+              disabled={Boolean(renameBlockedReason)}
+              title={renameBlockedReason ?? undefined}
+              onClick={onRename}
+            >
+              Rename
+            </Button>
+          )}
+        </div>
+        {mode === "edit" && savedSlug !== null && slug !== savedSlug && renameBlockedReason && (
+          <p className="text-xs text-amber-700 dark:text-amber-400">{renameBlockedReason}</p>
+        )}
       </Field>
 
       <Field

@@ -1,9 +1,12 @@
 import "server-only";
 import { siteConfig } from "@/config/site";
 import { getServerEnv } from "@/lib/env";
+import { GitHubClient } from "@/modules/git/github/github-client";
+import { GitHubProvider } from "@/modules/git/github/github-provider";
 import { LocalFsProvider } from "@/modules/git/local/local-fs-provider";
 import type { GitProvider } from "@/modules/git/types";
 import { EditorialService } from "@/modules/publishing/editorial-service";
+import { TaxonomyService } from "@/modules/publishing/taxonomy-service";
 import { ContentService } from "./content-service";
 
 /**
@@ -15,6 +18,17 @@ function createProvider(): GitProvider {
   switch (env.CONTENT_SOURCE) {
     case "local":
       return new LocalFsProvider(env.contentRoot);
+    case "github": {
+      // Validated by the env schema: both are present when CONTENT_SOURCE=github.
+      const [owner = "", repo = ""] = (env.CONTENT_REPO ?? "").split("/");
+      return new GitHubProvider({
+        owner,
+        repo,
+        branch: env.CONTENT_BRANCH,
+        contentPath: env.CONTENT_REPO_PATH,
+        client: new GitHubClient({ token: env.CONTENT_GITHUB_TOKEN ?? "", apiBaseUrl: env.GITHUB_API_URL }),
+      });
+    }
   }
 }
 
@@ -24,7 +38,7 @@ let provider: GitProvider | undefined;
 let contentService: ContentService | undefined;
 let editorialService: EditorialService | undefined;
 
-function getProvider(): GitProvider {
+export function getProvider(): GitProvider {
   provider ??= createProvider();
   return provider;
 }
@@ -37,7 +51,28 @@ export function getContentService(): ContentService {
   return contentService;
 }
 
+/** Human-readable description of where content lives, for the admin UI. */
+export function describeContentSource(): { kind: "local" | "github"; label: string; url: string | null } {
+  const env = getServerEnv();
+  if (env.CONTENT_SOURCE === "github") {
+    const path = env.CONTENT_REPO_PATH.replace(/^\/+|\/+$/g, "");
+    return {
+      kind: "github",
+      label: `${env.CONTENT_REPO}@${env.CONTENT_BRANCH}${path ? `/${path}` : ""}`,
+      url: `https://github.com/${env.CONTENT_REPO}/tree/${env.CONTENT_BRANCH}${path ? `/${path}` : ""}`,
+    };
+  }
+  return { kind: "local", label: `Local folder (${env.CONTENT_DIR})`, url: null };
+}
+
 export function getEditorialService(): EditorialService {
   editorialService ??= new EditorialService(getProvider(), getContentService(), { today: todayUtc });
   return editorialService;
+}
+
+let taxonomyService: TaxonomyService | undefined;
+
+export function getTaxonomyService(): TaxonomyService {
+  taxonomyService ??= new TaxonomyService(getProvider(), getContentService());
+  return taxonomyService;
 }

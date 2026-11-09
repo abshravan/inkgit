@@ -1,10 +1,10 @@
 "use client";
 
-import { ArrowLeft, Columns2, Eye, PenLine, Trash2 } from "lucide-react";
+import { ArrowLeft, Columns2, Eye, History, PenLine, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { deleteArticleAction, saveArticleAction } from "@/app/admin/actions";
+import { deleteArticleAction, renameArticleAction, saveArticleAction } from "@/app/admin/actions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { deleteLocalDraft, loadLocalDraft, saveLocalDraft, type LocalDraft } from "@/lib/local-drafts";
 import { cn } from "@/lib/utils";
 import type { ArticleFormValues } from "@/modules/content/editable";
+import { serializeArticle } from "@/modules/content/serialize";
 import { slugify } from "@/modules/content/slug";
 import type { Category } from "@/modules/content/types";
 import type { SaveArticleResult, SaveIntent } from "@/modules/publishing/types";
@@ -68,6 +69,8 @@ export function ArticleEditor({
   const [body, setBody] = useState(initial.body);
   const [slug, setSlug] = useState(initial.slug);
   const [slugTouched, setSlugTouched] = useState(mode === "edit");
+  /** Slug stored in the repository; `slug` may differ while a rename is pending. */
+  const savedSlug = mode === "edit" ? initial.slug : null;
   const [baseSha, setBaseSha] = useState(initial.sha);
   const [published, setPublished] = useState(initial.published);
   const [dirty, setDirty] = useState(false);
@@ -225,10 +228,23 @@ export function ArticleEditor({
   });
   const onShortcutSave = useCallback(() => saveRef.current("save"), []);
 
-  const remove = () => {
-    if (!baseSha) return;
+  const rename = () => {
+    if (!baseSha || !savedSlug || dirty) return;
     startSaving(async () => {
-      const result = await deleteArticleAction({ slug, baseSha });
+      const result = await renameArticleAction({ slug: savedSlug, newSlug: slug, baseSha });
+      if (result.status === "renamed") {
+        await deleteLocalDraft(draftKey);
+        router.replace(`/admin/articles/${result.slug}`);
+      } else {
+        setErrors({ slug: [result.message] });
+      }
+    });
+  };
+
+  const remove = () => {
+    if (!baseSha || !savedSlug) return;
+    startSaving(async () => {
+      const result = await deleteArticleAction({ slug: savedSlug, baseSha });
       if (result.status === "deleted") {
         await deleteLocalDraft(draftKey);
         setDirty(false);
@@ -250,7 +266,7 @@ export function ArticleEditor({
   return (
     // On desktop the editor fills the viewport and each pane scrolls on its own,
     // so the actions and toolbar never scroll away while writing.
-    <div className="flex min-h-0 flex-1 flex-col md:h-dvh">
+    <div className="flex min-h-0 flex-1 flex-col md:h-dvh md:flex-none md:overflow-hidden">
       <header className="flex flex-wrap items-center gap-3 border-b px-4 py-3 sm:px-6">
         <Button asChild variant="ghost" size="icon-sm" aria-label="Back to articles">
           <Link href="/admin/articles">
@@ -269,7 +285,12 @@ export function ArticleEditor({
             <>
               <DeleteButton onConfirm={remove} disabled={isSaving} />
               <Button asChild variant="ghost" size="sm">
-                <Link href={`/admin/preview/${slug}`} target="_blank">
+                <Link href={`/admin/articles/${savedSlug}/history`}>
+                  <History /> History
+                </Link>
+              </Button>
+              <Button asChild variant="ghost" size="sm">
+                <Link href={`/admin/preview/${savedSlug}`} target="_blank">
                   <Eye /> Preview
                 </Link>
               </Button>
@@ -388,9 +409,13 @@ export function ArticleEditor({
             onSlugChange={(next) => {
               setSlug(next);
               setSlugTouched(true);
-              setDirty(true);
+              // In edit mode a slug change is a separate rename action, not an edit.
+              if (mode === "create") setDirty(true);
             }}
-            slugEditable={mode === "create"}
+            mode={mode}
+            savedSlug={savedSlug}
+            onRename={rename}
+            renameBlockedReason={dirty ? "Save your changes before renaming." : null}
             categories={categories}
             errors={errors}
           />
@@ -399,6 +424,7 @@ export function ArticleEditor({
 
       <ConflictDialog
         conflict={conflict}
+        mine={conflict ? serializeArticle({ ...values, author: values.author || undefined, published }, body) : ""}
         busy={isSaving}
         onClose={() => setConflict(null)}
         onLoadTheirs={loadTheirs}

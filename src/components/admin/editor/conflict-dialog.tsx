@@ -10,6 +10,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { DiffView } from "../diff-view";
 
 export interface ConflictState {
   message: string;
@@ -26,8 +27,11 @@ export function ConflictDialog({
   onLoadTheirs,
   onOverwrite,
   busy,
+  mine,
 }: {
   conflict: ConflictState | null;
+  /** The editor's content serialized like a file, for the diff. */
+  mine: string;
   onClose: () => void;
   onLoadTheirs: () => void;
   onOverwrite: () => void;
@@ -43,11 +47,13 @@ export function ConflictDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         {conflict?.remote.content !== null && conflict?.remote.content !== undefined ? (
-          <div className="flex flex-col gap-2">
-            <p className="text-sm font-medium">Current version in the repository</p>
-            <pre className="max-h-72 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-xs whitespace-pre-wrap">
-              {conflict.remote.content}
-            </pre>
+          <div className="max-h-[50vh] overflow-auto">
+            <DiffView
+              oldText={conflict.remote.content}
+              newText={mine}
+              oldLabel="in the repository"
+              newLabel="your version"
+            />
           </div>
         ) : (
           <p className="text-sm">The file no longer exists in the repository.</p>

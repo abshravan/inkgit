@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, FileText, LayoutDashboard, PenLine, Plus } from "lucide-react";
+import { ExternalLink, FileText, LayoutDashboard, PenLine, Plus, Tags } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense } from "react";
@@ -10,6 +10,7 @@ const items = [
   { href: "/admin", label: "Overview", Icon: LayoutDashboard, exact: true },
   { href: "/admin/articles", label: "Articles", Icon: FileText, exact: false },
   { href: "/admin/articles/new", label: "New article", Icon: Plus, exact: true },
+  { href: "/admin/taxonomy", label: "Categories & tags", Icon: Tags, exact: true },
 ];
 
 /**

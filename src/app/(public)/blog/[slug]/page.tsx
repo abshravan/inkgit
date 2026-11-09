@@ -41,6 +41,8 @@ export async function generateMetadata({ params }: PageProps<"/blog/[slug]">): P
 export default async function ArticlePage({ params }: PageProps<"/blog/[slug]">) {
   const { slug } = await params;
   const article = await getPublishedArticle(slug);
+  // Old slugs of renamed articles are redirected in proxy.ts, before rendering.
+  // (A redirect thrown here would be cached by Next.js without its Location header.)
   if (!article) notFound();
 
   const [outcome, related] = await Promise.all([

@@ -60,3 +60,27 @@ export type SaveArticleResult =
 
 export type DeleteArticleResult =
   { status: "deleted" } | { status: "conflict"; message: string } | { status: "error"; message: string };
+
+export interface ArticleHistory {
+  supported: boolean;
+  commits: import("@/modules/git/types").CommitSummary[];
+  nextCursor: string | null;
+}
+
+export interface ArticleRevision {
+  commitSha: string;
+  /** File content at that commit (null if the file didn't exist there). */
+  content: string | null;
+  /** Current content on the branch (null if the article was deleted). */
+  current: string | null;
+  currentSha: string | null;
+}
+
+export type RestoreResult =
+  { status: "restored"; sha: string } | { status: "conflict"; message: string } | { status: "error"; message: string };
+
+export type RenameResult =
+  | { status: "renamed"; slug: string; sha: string }
+  | { status: "invalid"; message: string }
+  | { status: "conflict"; message: string }
+  | { status: "error"; message: string };

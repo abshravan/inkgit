@@ -6,7 +6,11 @@ import { ContentService } from "@/modules/content/content-service";
 import type { ArticleFormValues } from "@/modules/content/editable";
 import { LocalFsProvider } from "@/modules/git/local/local-fs-provider";
 import { ConflictError } from "@/modules/git/types";
+import { GitHubClient } from "@/modules/git/github/github-client";
+import { GitHubProvider } from "@/modules/git/github/github-provider";
+import type { GitProvider } from "@/modules/git/types";
 import { EditorialService } from "@/modules/publishing/editorial-service";
+import { FakeGitHub } from "../helpers/fake-github";
 
 const author = { name: "Tester", email: "tester@example.com" };
 let root: string;
@@ -123,7 +127,68 @@ describe("LocalFsProvider.commit", () => {
   });
 });
 
-describe("EditorialService", () => {
+interface Harness {
+  name: string;
+  setup(): Promise<{
+    provider: GitProvider;
+    read(path: string): Promise<string | null>;
+    externalWrite(path: string, content: string): Promise<void>;
+  }>;
+}
+
+const harnesses: Harness[] = [
+  {
+    name: "local filesystem",
+    async setup() {
+      return {
+        provider,
+        read: (p) => fs.readFile(path.join(root, p), "utf8").catch(() => null),
+        externalWrite: async (p, content) => {
+          await fs.mkdir(path.dirname(path.join(root, p)), { recursive: true });
+          await fs.writeFile(path.join(root, p), content);
+        },
+      };
+    },
+  },
+  {
+    name: "GitHub (fake API)",
+    async setup() {
+      const github = new FakeGitHub({ "README.md": "# repo" });
+      const client = new GitHubClient({ token: "test-token", fetch: github.fetch });
+      const gh = new GitHubProvider({
+        owner: github.owner,
+        repo: github.repo,
+        branch: "main",
+        contentPath: "content",
+        client,
+        headTtlMs: 0,
+      });
+      return {
+        provider: gh,
+        read: async (p) => github.file(`content/${p}`),
+        externalWrite: async (p, content) => void github.push({ [`content/${p}`]: content }),
+      };
+    },
+  },
+];
+
+describe.each(harnesses)("EditorialService contract — $name", (harness) => {
+  let read: (p: string) => Promise<string | null>;
+  let externalWrite: (p: string, content: string) => Promise<void>;
+  const readPost = async (slug: string) => {
+    const content = await read(`posts/${slug}.mdx`);
+    if (content === null) throw new Error(`posts/${slug}.mdx does not exist`);
+    return content;
+  };
+
+  beforeEach(async () => {
+    const h = await harness.setup();
+    read = h.read;
+    externalWrite = h.externalWrite;
+    const content = new ContentService(h.provider, { defaultAuthor: "A", wordsPerMinute: 200 });
+    service = new EditorialService(h.provider, content, { today: () => "2026-02-01" });
+  });
+
   it("creates a draft, then publishes it", async () => {
     const created = await service.save(
       { slug: "hello", baseSha: null, intent: "save", values: values(), body: "Hi" },
@@ -158,7 +223,7 @@ describe("EditorialService", () => {
       author,
     );
     const baseSha = created.status === "saved" ? created.sha : "";
-    await fs.writeFile(path.join(root, "posts", "c.mdx"), (await readPost("c")).replace("mine", "theirs"));
+    await externalWrite("posts/c.mdx", (await readPost("c")).replace("mine", "theirs"));
 
     const result = await service.save(
       { slug: "c", baseSha, intent: "save", values: values(), body: "mine v2" },
@@ -182,7 +247,7 @@ describe("EditorialService", () => {
       author,
     );
     expect(result).toMatchObject({ status: "invalid", fieldErrors: { coverImage: expect.any(Array) } });
-    await expect(readPost("bad")).rejects.toThrow();
+    expect(await read("posts/bad.mdx")).toBeNull();
   });
 
   it("rejects invalid slugs", async () => {
@@ -210,9 +275,8 @@ describe("EditorialService", () => {
   });
 
   it("preserves unknown frontmatter keys and canonicalUrl", async () => {
-    await fs.mkdir(path.join(root, "posts"), { recursive: true });
-    await fs.writeFile(
-      path.join(root, "posts", "keep.mdx"),
+    await externalWrite(
+      "posts/keep.mdx",
       '---\ntitle: "Old"\ndescription: "D"\ndate: "2026-01-01"\ncanonicalUrl: "https://example.com/x"\nseries: "Deep Dives"\npublished: true\n---\n\nBody\n',
     );
     const loaded = await service.loadForEdit("keep");
@@ -235,8 +299,7 @@ describe("EditorialService", () => {
   });
 
   it("opens invalid files for repair and lists them in the overview", async () => {
-    await fs.mkdir(path.join(root, "posts"), { recursive: true });
-    await fs.writeFile(path.join(root, "posts", "broken.mdx"), "---\ntitle: Only a title\n---\n\nBody\n");
+    await externalWrite("posts/broken.mdx", "---\ntitle: Only a title\n---\n\nBody\n");
     const loaded = await service.loadForEdit("broken");
     expect(loaded?.issues.join("\n")).toMatch(/description/);
     const overview = await service.getOverview();

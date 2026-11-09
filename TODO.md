@@ -28,7 +28,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done (functionality verified, n
 ### Phase 1 follow-ups (non-blocking)
 
 - [ ] Article page Lighthouse performance is 93–94 locally (simulated mobile; LCP render delay). Re-measure on Vercel in Phase 5.
-- [ ] Unknown slugs render the 404 page with `noindex` but HTTP 200 (streaming). Consider a slug check in `proxy.ts` (Phase 3).
+- [ ] Unknown slugs render the 404 page with `noindex` but HTTP 200 (streaming). `proxy.ts` now has a content lookup (redirects); a hard 404 could reuse it.
 - [ ] `pnpm content:check` CLI to validate a content folder/repo (needed by the content-repo CI in Phase 3).
 - [ ] When the network allows `ui.shadcn.com`, re-sync vendored shadcn components with `shadcn add --overwrite`.
 
@@ -51,18 +51,26 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done (functionality verified, n
 - [ ] Taxonomy management UI (edit `taxonomy.yml`) — moved to Phase 3 with other multi-file commits.
 - [ ] Convert the Playwright smoke run into a committed `@playwright/test` suite (Phase 5).
 
-## Phase 3 — Git Integration
+## Phase 3 — Git Integration ✅
 
-- [ ] `GitHubProvider` (tree read, atomic commit, history, file-at-commit, branch)
-- [x] Path guard + tests (traversal, prefix allowlist) — done in Phase 1
-- [ ] Optimistic concurrency in `GitHubProvider` (`ConflictError` + conflict UI already done in Phase 2)
-- [ ] Publishing workflow end-to-end
-- [ ] Webhook endpoint (HMAC) + `revalidateTag("content")`
-- [ ] History viewer + diff + restore
-- [ ] Rename with `redirectFrom` → redirects
-- [ ] Conflict diff view (side-by-side) instead of raw remote file
-- [ ] Taxonomy management (categories in `taxonomy.yml`)
-- [ ] Integration tests (mocked GitHub)
+- [x] `GitHubProvider` (tree read, atomic multi-file commit, history, file-at-commit, branch creation)
+- [x] Path guard + tests (traversal, prefix allowlist) — Phase 1
+- [x] Optimistic concurrency on GitHub (per-file SHA checks + fast-forward-only ref update with retry)
+- [x] Publishing workflow end-to-end through GitHub commits (author = signed-in admin)
+- [x] Webhook endpoint (HMAC, ping, repo/branch/path filtering) + `revalidateTag("content", { expire: 0 })`
+- [x] History viewer + diff + restore (as a new commit)
+- [x] Rename with `redirectFrom` → HTTP 308 via `proxy.ts`
+- [x] Conflict diff view
+- [x] Taxonomy management (categories in `taxonomy.yml`, tag rename/merge/delete) in single commits
+- [x] Contract tests (both providers) + fake GitHub API (in-process and HTTP)
+- [x] Verified: 171 unit tests, 23-check e2e on the GitHub source + 22-check e2e on the local source
+
+### Phase 3 follow-ups
+
+- [ ] **Live verification against a real GitHub repository** (needs a content repo + fine-grained token).
+- [ ] GitHub App authentication (installation tokens) instead of a PAT — Phase 5.
+- [ ] `pnpm content:check` + reusable GitHub Action for the content repository (validate frontmatter/MDX on PRs).
+- [ ] Preserve YAML comments in `taxonomy.yml` when editing.
 
 ## Phase 4 — Advanced Features
 

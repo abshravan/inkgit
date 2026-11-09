@@ -1,4 +1,4 @@
-export type CommitAction = "create" | "update" | "publish" | "unpublish" | "delete";
+export type CommitAction = "create" | "update" | "publish" | "unpublish" | "delete" | "restore" | "rename" | "taxonomy";
 
 /**
  * Conventional commit messages for content changes, e.g.
@@ -6,12 +6,13 @@ export type CommitAction = "create" | "update" | "publish" | "unpublish" | "dele
  */
 export function commitMessage(
   action: CommitAction,
-  slug: string,
-  options: { draft?: boolean; overwrite?: boolean } = {},
+  subjectTarget: string,
+  options: { draft?: boolean; overwrite?: boolean; fromCommit?: string; fromSlug?: string } = {},
 ): string {
-  const scope =
-    action === "update" && options.draft ? "draft" : action === "create" && options.draft ? "draft" : action;
-  const subject = `content(${scope}): ${slug}`;
+  const scope = (action === "update" || action === "create") && options.draft ? "draft" : action;
+  let subject = `content(${scope}): ${subjectTarget}`;
+  if (action === "restore" && options.fromCommit) subject += ` to ${options.fromCommit.slice(0, 7)}`;
+  if (action === "rename" && options.fromSlug) subject += ` (was ${options.fromSlug})`;
   const notes = options.overwrite ? "\n\nOverwrote changes made outside InkGit after an explicit author decision." : "";
   return `${subject}${notes}\n\nVia: InkGit`;
 }
